@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PerfPilot — Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bench:#F7F7F2; --panel:#FFFFFF; --ink:#292929; --graphite:#72726E; --rule:#E3E3DE;
+    --green:#5B6F00; --oxide:#BD4A30; --ochre:#B26A00; --steel:#2F5D8A; --teal:#6B5BA8;
+    --serif:"Instrument Serif", Georgia, "Times New Roman", serif;
+    --sans:"IBM Plex Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body { margin:0; background:var(--bench); color:var(--ink);
+         font:400 1rem/1.5 var(--sans); -webkit-font-smoothing:antialiased; }
+  a { color:inherit; }
+  :focus-visible { outline:2px solid var(--green); outline-offset:3px; border-radius:2px; }
+  code { font:400 .86em var(--mono); background:transparent; border-bottom:1px solid var(--rule); }
+
+  .page { max-width:1120px; margin:0 auto; padding:0 1.25rem; display:grid;
+          grid-template-columns:200px minmax(0,1fr); gap:3rem; }
+  .rail { position:sticky; top:0; align-self:start; height:100vh; padding:2.2rem 0;
+          display:flex; flex-direction:column; gap:1.6rem; }
+  .brand { font:400 1.35rem var(--serif); text-decoration:none; }
+  .rail nav { display:flex; flex-direction:column; gap:.15rem; }
+  .rail nav a { font-size:.9rem; color:var(--graphite); text-decoration:none; padding:.25rem 0 .25rem .7rem;
+                border-left:2px solid transparent; }
+  .rail nav a:hover { color:var(--ink); }
+  .rail nav a[aria-current="true"] { color:var(--ink); border-left-color:var(--ink); }
+
+  main { min-width:0; padding:2.2rem 0 4rem; }
+
+  .lede-block { padding:1.2rem 0 2.6rem; border-bottom:1px solid var(--rule); }
+  h1 { margin:0 0 1.1rem; font:400 clamp(2.6rem,6vw,4.3rem)/.98 var(--serif); letter-spacing:-.01em;
+       max-width:16ch; }
+  .lede-block p { margin:0; max-width:60ch; font-size:1.1rem; color:var(--graphite); }
+  .facts { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:1.1rem 2rem;
+           margin:2rem 0 0; }
+  .facts div { border:1px solid var(--rule); border-radius:999px; padding:.45rem 1.05rem; background:var(--panel); }
+  .facts dt { font:500 .72rem var(--sans); color:var(--graphite); }
+  .facts dd { margin:.15rem 0 0; font:400 1.02rem var(--sans); }
+
+  section { padding:2.8rem 0; border-bottom:1px solid var(--rule); scroll-margin-top:1.5rem; }
+  section:last-of-type { border-bottom:0; }
+  h2 { margin:0 0 .5rem; font:400 2.1rem/1.1 var(--serif); }
+  .intro { margin:0 0 1.6rem; max-width:66ch; color:var(--graphite); }
+  p { max-width:68ch; margin:0 0 1rem; }
+
+  figure { margin:0; }
+  .svgwrap { overflow-x:auto; background:var(--panel); border:1px solid var(--rule); border-radius:8px; padding:.5rem; }
+  .svgwrap svg { display:block; width:100%; min-width:640px; height:auto; }
+  .key { display:flex; flex-wrap:wrap; gap:.4rem 1.2rem; padding:.85rem 0 0; font-size:.82rem; color:var(--graphite); }
+  .key span { display:inline-flex; align-items:center; gap:.4rem; }
+  .key i { width:.7rem; height:.7rem; border:1.5px solid; border-radius:2px; display:inline-block; }
+  .readout { margin-top:.9rem; min-height:3.4em; padding:.6rem 0 0 .9rem; border-left:2px solid var(--ink);
+             font-size:.92rem; }
+  .readout .none { color:var(--graphite); }
+  figcaption { font-size:.88rem; color:var(--graphite); margin-top:.9rem; max-width:72ch; }
+
+  .node { cursor:default; }
+  .node .body { transition:opacity .15s ease; }
+  .node:hover .body, .node.active .body { opacity:.82; }
+
+  .notes { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:1.2rem 2.2rem; margin-top:2rem; }
+  .notes h3 { margin:0 0 .3rem; font:500 .95rem var(--sans); }
+  .notes p { margin:0; font-size:.9rem; color:var(--graphite); }
+
+  ol.steps { list-style:none; margin:0; padding:0; counter-reset:s; max-width:70ch; }
+  ol.steps li { counter-increment:s; display:grid; grid-template-columns:2.4rem 1fr; padding:.9rem 0;
+                border-top:1px solid var(--rule); }
+  ol.steps li:last-child { border-bottom:1px solid var(--rule); }
+  ol.steps li::before { content:counter(s, decimal-leading-zero); font:400 .9rem var(--mono); color:var(--teal); padding-top:.1rem; }
+  ol.steps b { display:block; font-weight:500; }
+  ol.steps span { color:var(--graphite); font-size:.95rem; }
+
+  dl.decisions { margin:0; max-width:76ch; }
+  dl.decisions div { display:grid; grid-template-columns:minmax(180px,.8fr) 1.2fr; gap:1.2rem 2.2rem;
+                     padding:1.1rem 0; border-top:1px solid var(--rule); }
+  dl.decisions div:last-child { border-bottom:1px solid var(--rule); }
+  dl.decisions dt { font:400 1.35rem/1.25 var(--serif); }
+  dl.decisions dd { margin:0; color:var(--graphite); font-size:.96rem; }
+
+  table.status { width:100%; border-collapse:collapse; font-size:.93rem; }
+  table.status th { text-align:left; font:400 .8rem var(--mono); color:var(--graphite); padding:.5rem .6rem .5rem 0;
+                    border-bottom:1px solid var(--ink); }
+  table.status td { padding:.7rem .6rem .7rem 0; border-bottom:1px solid var(--rule); vertical-align:top; }
+  table.status td code { font-size:.82rem; }
+  .ok { color:var(--green); font-weight:500; } .wait { color:var(--ochre); font-weight:500; }
+
+  footer { padding:2rem 0 3rem; font-size:.85rem; color:var(--graphite); max-width:68ch; }
+
+  @media (max-width:820px) {
+    .page { grid-template-columns:1fr; gap:0; }
+    .rail { position:static; height:auto; padding:1.2rem 0 0; flex-direction:row; flex-wrap:wrap;
+            align-items:center; gap:.4rem 1rem; border-bottom:1px solid var(--rule); }
+    .rail nav { flex-direction:row; flex-wrap:wrap; gap:.2rem .9rem; }
+    .rail nav a { padding:.2rem 0; border-left:0; border-bottom:2px solid transparent; }
+    .rail nav a[aria-current="true"] { border-bottom-color:var(--ink); }
+    main { padding-top:1.4rem; }
+    dl.decisions div { grid-template-columns:1fr; gap:.4rem; }
+    h2 { font-size:1.75rem; }
+  }
+  @media (prefers-reduced-motion:reduce) {
+    html { scroll-behavior:auto; }
+    * { transition:none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="vendor/react.min.js"></script>
+<script src="vendor/react-dom.min.js"></script>
+<script src="vendor/babel.min.js"></script>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+
+/* ---------- palette by role ---------- */
+const TONE = {
+  blue:  { stroke: "#2F5D8A", fill: "#EAF4FE" },   // decide
+  teal:  { stroke: "#6B5BA8", fill: "#F3F0FA" },   // advise (brain)
+  green: { stroke: "#5B6F00", fill: "#F2F6E1" },   // prove (verdicts)
+  red:   { stroke: "#BD4A30", fill: "#FBE9E4" },   // spend (GPU)
+  amber: { stroke: "#B26A00", fill: "#FDF1E0" },   // bounded salvage
+  slate: { stroke: "#72726E", fill: "#FFFFFF" },   // ground / decision
+  navy:  { stroke: "#292929", fill: "#292929" },
+};
+
+function Node({ n, active, onHover }) {
+  const t = TONE[n.tone];
+  const cx = n.x + n.w / 2;
+  return (
+    <g className={"node" + (active ? " active" : "")} tabIndex={0}
+       onMouseEnter={() => onHover(n)} onMouseLeave={() => onHover(null)}
+       onFocus={() => onHover(n)} onBlur={() => onHover(null)}>
+      <rect className="body" x={n.x} y={n.y} width={n.w} height={n.h} rx="6"
+            fill={n.solid ? t.stroke : t.fill} stroke={t.stroke} strokeWidth={n.solid ? 0 : 1.4} />
+      <text x={cx} y={n.y + 22} textAnchor="middle" fontSize="13" fontWeight="500"
+            fontFamily="IBM Plex Sans, sans-serif" fill={n.solid ? "#fff" : "#292929"}>{n.title}</text>
+      {(n.lines || []).map((L, i) => (
+        <text key={i} x={cx} y={n.y + 39 + i * 15} textAnchor="middle" fontSize="10.5"
+              fontFamily="IBM Plex Mono, monospace" fill={n.solid ? "#F2F2EC" : "#72726E"}>{L}</text>
+      ))}
+    </g>
+  );
+}
+
+function Diamond({ n, active, onHover }) {
+  const t = TONE[n.tone];
+  const cx = n.x + n.w / 2, cy = n.y + n.h / 2;
+  return (
+    <g className={"node" + (active ? " active" : "")} tabIndex={0}
+       onMouseEnter={() => onHover(n)} onMouseLeave={() => onHover(null)}
+       onFocus={() => onHover(n)} onBlur={() => onHover(null)}>
+      <polygon className="body" points={`${cx},${n.y} ${n.x + n.w},${cy} ${cx},${n.y + n.h} ${n.x},${cy}`}
+               fill={t.fill} stroke={t.stroke} strokeWidth="1.4" />
+      <text x={cx} y={cy + 4} textAnchor="middle" fontSize="11.5" fontWeight="500"
+            fontFamily="IBM Plex Sans, sans-serif" fill="#292929">{n.title}</text>
+    </g>
+  );
+}
+
+function Edge({ d, label, lx, ly, color, dashed, bold, id }) {
+  const c = color || "#72726E";
+  return (
+    <g>
+      <path d={d} fill="none" stroke={c} strokeWidth={bold ? 2 : 1.3}
+            strokeDasharray={dashed ? "5,4" : ""} markerEnd={`url(#${id})`} />
+      {label && <text x={lx} y={ly} textAnchor="middle" fontSize="10.5" fontWeight={bold ? "500" : "400"}
+                      fontFamily="IBM Plex Mono, monospace" fill={c}>{label}</text>}
+    </g>
+  );
+}
+
+function Badge({ x, y, n }) {
+  return (
+    <g>
+      <circle cx={x} cy={y} r="10" fill="#292929" stroke="#FFFFFF" strokeWidth="1.5" />
+      <text x={x} y={y + 3.8} textAnchor="middle" fontSize="10.5" fontWeight="500"
+            fontFamily="IBM Plex Mono, monospace" fill="#FFFFFF">{n}</text>
+    </g>
+  );
+}
+
+function Key({ items }) {
+  return (
+    <div className="key">
+      {items.map(([tone, label]) => (
+        <span key={label}><i style={{ background: TONE[tone].fill, borderColor: TONE[tone].stroke }} />{label}</span>
+      ))}
+    </div>
+  );
+}
+
+function Readout({ node }) {
+  if (!node) return <div className="readout"><span className="none">Hover or focus a box to read what it does.</span></div>;
+  return <div className="readout" aria-live="polite"><b style={{ fontWeight: 500 }}>{node.title}. </b>{node.desc}</div>;
+}
+
+const marker = (id, color) => (
+  <marker id={id} markerWidth="7" markerHeight="7" refX="6.5" refY="3.5" orient="auto">
+    <path d="M0,0 L7,3.5 L0,7" fill="none" stroke={color} strokeWidth="1.4" />
+  </marker>
+);
+
+/* ---------- navigation ---------- */
+const SECTIONS = [
+  ["planes", "Planes"], ["modules", "Modules"], ["bisect", "Bisect"],
+  ["tune", "TuneSmith"], ["decisions", "Decisions"], ["status", "Status"],
+];
+
+function Rail({ active }) {
+  return (
+    <aside className="rail">
+      <a className="brand" href="#top">PerfPilot</a>
+      <nav aria-label="Sections">
+        {SECTIONS.map(([id, label]) => (
+          <a key={id} href={"#" + id} aria-current={active === id ? "true" : undefined}>{label}</a>
+        ))}
+      </nav>
+    </aside>
+  );
+}
+
+/* ---------- 01 · planes ---------- */
+const HIGH_NODES = [
+  { id: "cli", x: 30, y: 80, w: 200, h: 120, tone: "blue", title: "CLI + Drivers",
+    lines: ["bisect · tune · eval", "loops · events · report"],
+    desc: "Typer commands and driver loops (cli.py, modes/). They decide what to run, call the brain and stats, and write events.jsonl. Costs nothing." },
+  { id: "brain", x: 268, y: 80, w: 200, h: 120, tone: "teal", title: "Brain (Baseten)",
+    lines: ["pick · extra runs · rank · propose", "validated JSON · fallback"],
+    desc: "muse-spark-open proposes commits, run counts, knob order and one-knob changes. Output is schema-validated with one retry. Out-of-range answers are rejected and replaced by a deterministic fallback, including when no key is set." },
+  { id: "stats", x: 506, y: 80, w: 200, h: 120, tone: "green", title: "Stats + Reports",
+    lines: ["log-ratio Welch interval", "events.jsonl → report.html"],
+    desc: "stats.py turns samples into verdicts (confirm, classify at m = R/2, tune_accepts). render.py builds the report from the event log." },
+  { id: "cfg", x: 744, y: 80, w: 186, h: 120, tone: "slate", title: "Config + Git",
+    lines: ["perfpilot.yaml · .env", "GitHub compare · wheels"],
+    desc: "Model, workload, knobs and stats caps. Bisect ranges come from the GitHub compare API. Eval anchors a 16-commit range to the newest wheeled nightly. Secrets come from env only." },
+  { id: "trial", x: 30, y: 300, w: 275, h: 105, tone: "red", title: "Worker.run_trial",
+    lines: ["venv per SHA · vLLM serve · warmup", "N bench runs → TrialResult"],
+    desc: "One warm A100-40GB container (max_containers=1) serves every trial of a run. The GPU UUID is re-checked per trial; a change is an error, never a comparison. Returns ok, skip or error with per-run tok/s and p99 TTFT." },
+  { id: "qual", x: 343, y: 300, w: 275, h: 105, tone: "red", title: "Worker.answer_batch",
+    lines: ["50Q bank · greedy · 32 tokens", "tune only: accuracy gate"],
+    desc: "Answers the fixed 50-question bank for the baseline, for numeric knobs (kv_cache_dtype), and for the final config. A drop of more than 2 points rejects the change." },
+  { id: "cache", x: 656, y: 300, w: 274, h: 105, tone: "red", title: "Modal Volume /cache",
+    lines: ["envs/<sha> · toolchain · hf", "venvs · nvcc + ninja · weights"],
+    desc: "The perfpilot-cache volume holds per-SHA venvs (reused when the installed SHA matches), one shared nvcc+ninja toolchain, and HF weights. Repeat trials skip the install." },
+];
+
+function Planes() {
+  const [hover, setHover] = useState(null);
+  return (
+    <figure>
+      <div className="svgwrap">
+        <svg viewBox="0 0 960 440" role="img" aria-label="Control plane runs locally and decides. Measurement plane runs on Modal A100 and spends money.">
+          <defs>{marker("ha", "#72726E")}{marker("haR", "#BD4A30")}</defs>
+          <text x="30" y="30" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#2F5D8A">control plane · local · $0</text>
+          <rect x="10" y="40" width="940" height="180" rx="6" fill="#F2F2EC" stroke="#2F5D8A" strokeWidth="1" />
+          <text x="30" y="262" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#BD4A30">measurement plane · Modal A100-40GB · $2.10/h</text>
+          <rect x="10" y="272" width="940" height="152" rx="6" fill="#FBF1EE" stroke="#BD4A30" strokeWidth="1" />
+          {HIGH_NODES.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
+          <Edge id="ha" d="M230,140 L260,140" label="ask" lx={245} ly={132} />
+          <Edge id="ha" d="M130,80 L130,56 L606,56 L606,76" label="samples → verdict · events → report" lx={368} ly={50} />
+          <Edge id="ha" d="M837,200 L837,212 L190,212 L190,204" label="config · commit list" lx={520} ly={208} />
+          <Edge id="haR" color="#BD4A30" bold d="M90,224 L90,296" label="run_trial $$$" lx={94} ly={262} />
+          <Edge id="haR" color="#BD4A30" dashed d="M170,296 L170,228" label="TrialResult" lx={208} ly={266} />
+          <Edge id="haR" color="#BD4A30" bold d="M222,222 L400,296" label="answer_batch $$$" lx={352} ly={238} />
+        </svg>
+      </div>
+      <Key items={[["blue", "decide"], ["teal", "advise"], ["green", "prove"], ["red", "spend"], ["slate", "ground"]]} />
+      <Readout node={hover} />
+      <figcaption>The control plane decides and proves. The brain only advises. The two red arrows into the
+      worker are the only calls that spend money.</figcaption>
+    </figure>
+  );
+}
+
+/* ---------- 02 · modules ---------- */
+const DETAIL_ROWS = [
+  { label: "Inputs", boxes: [
+    { id: "yaml", x: 10, y: 30, w: 232, h: 76, tone: "slate", title: "perfpilot.yaml",
+      lines: ["model · workload · stats · knobs"],
+      desc: "config.py pydantic models: model id, bench workload, min and max runs with confidence, bisect repo and endpoints, tune knob grid and quality limit." },
+    { id: "env", x: 258, y: 30, w: 232, h: 76, tone: "slate", title: ".env (gitignored)",
+      lines: ["PERFPILOT_LLM_API_KEY", "or BASETEN_API_KEY"],
+      desc: "The brain key. .env fills gaps only; a real env var always wins. The value is never printed or logged. HF_TOKEN lives in the Modal secret 'huggingface'." },
+    { id: "args", x: 506, y: 30, w: 232, h: 76, tone: "slate", title: "CLI args",
+      lines: ["--good --bad --commit", "--trials --config"],
+      desc: "Per-invocation range or base commit. Config values are the defaults. A missing model or range fails loudly with exit 2." },
+    { id: "wheels", x: 754, y: 30, w: 236, h: 76, tone: "slate", title: "wheels + GitHub",
+      lines: ["wheels.vllm.ai/<sha> per commit", "compare API · nightly anchor"],
+      desc: "Per-SHA nightly wheels. A cached venv is rebuilt when its installed SHA differs. GitHub compare gives the bisect range; eval uses wheeled_range (newest nightly)." },
+  ]},
+  { label: "CLI · cli.py", boxes: [
+    { id: "cmds", x: 10, y: 150, w: 980, h: 72, tone: "blue", title: "bisect · tune · eval · report · watch",
+      lines: ["_load · _deployed_worker · _make_orchestrator (AgentOrchestrator, or None → deterministic fallbacks)"],
+      desc: "Thin wiring. Loads config, looks up the deployed Modal Worker, builds the orchestrator when a key exists, and hands measure and quality callbacks to the drivers." },
+  ]},
+  { label: "Orchestration · modes/driver.py · bisect.py · tune.py · orchestrator.py", boxes: [
+    { id: "dbis", x: 10, y: 266, w: 318, h: 88, tone: "blue", title: "drive_bisect_live · drive_eval_trial",
+      lines: ["run_bisect loop · events · report", "eval: planted culprit · retry-once", "out: culprit / range + verify"],
+      desc: "Wrap run_bisect with a run dir, events and report. The eval driver plants an injected slowdown and retries a failed trial once. The live driver marks a failed trial skipped." },
+    { id: "dtun", x: 341, y: 266, w: 318, h: 88, tone: "blue", title: "drive_tune_live",
+      lines: ["one knob → measure → tune_accepts", "quality gate on numeric knobs", "out: best flags + serve_command"],
+      desc: "Wraps run_tuning. One-knob changes on the best config are accepted only above +2% with p99 TTFT at most 10% worse. Numeric knobs and the final config must pass the quality gate." },
+    { id: "adap", x: 672, y: 266, w: 318, h: 88, tone: "teal", title: "make_pick_fn · extra_runs_fn · propose_fn",
+      lines: ["AgentOrchestrator → driver callbacks", "fallback: middle · 2 runs · next untried"],
+      desc: "Adapters from validated brain decisions to plain values. Every call logs an agent_call event. Rejected proposals return the deterministic fallback." },
+  ]},
+  { label: "Intelligence · agent/ + stats.py", boxes: [
+    { id: "spark", x: 10, y: 398, w: 485, h: 88, tone: "teal", title: "SparkClient · complete_validated · prompts",
+      lines: ["PickCommit · ExtraRuns · RankKnobs · ProposeConfig", "pydantic schema · one retry · key env → .env"],
+      desc: "OpenAI-compatible Baseten client. Each response is stripped to JSON and validated. A second failure raises, and the orchestrator falls back." },
+    { id: "class", x: 508, y: 398, w: 482, h: 88, tone: "green", title: "confirm_regression · classify_commit · tune_accepts",
+      lines: ["log-ratio Welch interval · midpoint m = R/2", "good / bad / inconclusive / no_regression"],
+      desc: "The verdict math. Endpoints need a significant effect of at least 3%. A probe is good or bad only when its whole interval clears m = R/2." },
+  ]},
+  { label: "Execution · worker/ on one warm Modal A100-40GB", boxes: [
+    { id: "wapp", x: 10, y: 530, w: 155, h: 88, tone: "red", title: "modal_app.py",
+      lines: ["run_trial · answer_batch", "same-GPU UUID check"],
+      desc: "Worker class with max_containers=1, a 10-minute scaledown and retries=0. Runs env, serve, warmup, then N runs. Never raises for a bad commit; it returns skip." },
+    { id: "wenv", x: 175, y: 530, w: 155, h: 88, tone: "red", title: "env.py",
+      lines: ["venv per SHA", "shared nvcc + ninja"],
+      desc: "Builds /cache/envs/<sha> once from nightly wheels. A failed install or missing wheel is a skip. One shared toolchain lives under /cache/toolchain." },
+    { id: "wsrv", x: 340, y: 530, w: 155, h: 88, tone: "red", title: "server.py",
+      lines: ["vllm serve · /health", "fail fast on crash"],
+      desc: "Starts vLLM in its own process group and polls /health with a 15-minute cap. Aborts early on exit or traceback, and always kills the group." },
+    { id: "wben", x: 505, y: 530, w: 155, h: 88, tone: "red", title: "bench.py",
+      lines: ["warmup + N runs", "seed + i per run"],
+      desc: "Pinned bench client runs the fixed workload. Each run normalizes to RunMetrics: tok/s, TTFT, TPOT and failed requests." },
+    { id: "wqual", x: 670, y: 530, w: 155, h: 88, tone: "red", title: "quality.py",
+      lines: ["load_bank · grade", "accuracy() vs bank"],
+      desc: "The 50-question bank with normalized first-line grading and accuracy as a percent. Pure logic; the answers come from answer_batch." },
+    { id: "wsch", x: 835, y: 530, w: 155, h: 88, tone: "red", title: "schemas.py",
+      lines: ["RunMetrics", "TrialResult ok/skip/error"],
+      desc: "Pydantic wire contract between worker and driver. Runs with failed requests are excluded. All-failed is an error." },
+  ]},
+];
+
+function Modules() {
+  const [hover, setHover] = useState(null);
+  const all = DETAIL_ROWS.flatMap(r => r.boxes);
+  return (
+    <figure>
+      <div className="svgwrap">
+        <svg viewBox="0 0 1000 760" role="img" aria-label="Module contracts from inputs through execution to evidence">
+          <defs>{marker("da", "#72726E")}</defs>
+          {DETAIL_ROWS.map(r => (
+            <text key={r.label} x="10" y={r.boxes[0].y - 11} fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#2F5D8A">{r.label}</text>
+          ))}
+          {all.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
+          <Edge id="da" d="M500,106 L500,146" />
+          <Edge id="da" d="M500,222 L500,262" label="pick / propose / classify" lx={590} ly={246} />
+          <Edge id="da" d="M300,354 L300,394" />
+          <Edge id="da" d="M700,354 L700,394" />
+          <Edge id="da" color="#BD4A30" d="M500,490 L500,526" label="run_trial · answer_batch $$$ → TrialResult" lx={590} ly={512} />
+          <Edge id="da" d="M500,618 L500,636" label="events → render" lx={560} ly={630} />
+          <rect x="10" y="640" width="980" height="100" rx="6" fill="#F2F6E1" stroke="#5B6F00" strokeWidth="1.2" />
+          <text x="500" y="668" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="IBM Plex Sans, sans-serif" fill="#292929">Evidence · runs/&lt;run-id&gt;/events.jsonl (13 event types) → render.py → report.html</text>
+          <text x="500" y="688" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">config.yaml · agent-events.jsonl · results/&lt;sha&gt;__&lt;flags&gt;/ · logs/ · fix.patch if drafted</text>
+          <text x="500" y="706" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">perfpilot report re-renders offline · watch adds a 5s auto-reload · partial runs render honestly</text>
+        </svg>
+      </div>
+      <Key items={[["slate", "inputs"], ["blue", "orchestrate"], ["teal", "brain"], ["green", "verdict"], ["red", "GPU spend"]]} />
+      <Readout node={hover} />
+      <figcaption>Each box names its real file and contract. Arrows carry the data shape. The red row is the only
+      layer that crosses a cost boundary.</figcaption>
+    </figure>
+  );
+}
+
+/* ---------- 03 · bisect flowchart ----------
+   Spine = the search. Left column = where a run ends. Right = side branches.
+   Loop-backs are numbered badges: 1 back to "open range left?", 2 re-measure same SHA. */
+const FLOW_NODES = [
+  { id: "start", kind: "term", x: 280, y: 14, w: 240, h: 40, title: "bisect --good G --bad B",
+    desc: "Entry point. Range comes from CLI args or bisect.good/bad in perfpilot.yaml. Caps come from stats.min_runs, max_runs and confidence." },
+  { id: "range", x: 275, y: 74, w: 250, h: 50, tone: "slate", title: "Commit range",
+    lines: ["compare API · oldest first"],
+    desc: "commits_between() via the GitHub compare API. The eval command uses wheeled_range() instead: 16 commits ending at the newest wheeled nightly." },
+  { id: "ends", x: 275, y: 144, w: 250, h: 52, tone: "red", title: "Measure endpoints G, B $$$",
+    lines: ["min_runs each · tok/s samples"],
+    desc: "Both endpoints are measured before any probing, on the same warm worker." },
+  { id: "endok", kind: "diamond", x: 295, y: 214, w: 210, h: 64, tone: "slate", title: "endpoints fresh?",
+    desc: "A trial that skipped or returned no samples cannot anchor the search." },
+  { id: "e1", x: 30, y: 218, w: 210, h: 56, tone: "slate", title: "stop",
+    lines: ["error → endpoint_error", "skip → no_regression"],
+    desc: "Early exit. The driver still writes culprit and run_end events and renders report.html." },
+  { id: "conf", kind: "diamond", x: 295, y: 300, w: 210, h: 64, tone: "slate", title: "regression confirmed?",
+    desc: "confirm_regression: R = ln(bad/good). Needs an interval that excludes 0 and |R| of at least 3%. R becomes the full effect." },
+  { id: "e2", x: 30, y: 304, w: 210, h: 56, tone: "slate", title: "stop · no_regression",
+    lines: ["interval covers 0 or |R| < 3%"],
+    desc: "Nothing to bisect. Recorded as no_regression instead of chasing noise." },
+  { id: "open", kind: "diamond", x: 295, y: 384, w: 210, h: 64, tone: "slate", title: "open range left?",
+    desc: "Loop check: boundaries more than one apart AND an untested, unskipped commit between them. No goes to culprit_of." },
+  { id: "culprit", x: 30, y: 388, w: 210, h: 56, tone: "green", title: "culprit_of",
+    lines: ["culprit · range if skipped between"],
+    desc: "The first bad commit. Status becomes culprit_range when skipped or ambiguous commits sit between the final boundaries." },
+  { id: "pick", x: 275, y: 470, w: 250, h: 48, tone: "blue", title: "Pick next SHA",
+    lines: ["brain pick in range · else middle"],
+    desc: "pick_next validates the agent proposal against the open range. Any miss or exception falls back to the middle commit." },
+  { id: "measure", x: 275, y: 536, w: 250, h: 52, tone: "red", title: "Measure SHA $$$",
+    lines: ["min_runs · same warm A100"],
+    desc: "run_trial on the deployed Worker: venv for the SHA, vLLM serve, warmup, then N bench runs." },
+  { id: "fresh", kind: "diamond", x: 295, y: 608, w: 210, h: 64, tone: "slate", title: "trial fresh?",
+    desc: "A skip or error yields no samples in the live driver. The commit is labelled skipped." },
+  { id: "skip", x: 600, y: 616, w: 360, h: 48, tone: "amber", title: "label skipped",
+    lines: ["boundaries unchanged · back to the loop check"],
+    desc: "Never zero-filled. A skip between the final boundaries turns the answer into a culprit_range." },
+  { id: "classify", x: 275, y: 690, w: 250, h: 48, tone: "green", title: "classify_commit vs good",
+    lines: ["log-ratio Welch · midpoint m = R/2"],
+    desc: "good if the whole interval sits on the good side of m, bad if it sits on the bad side, otherwise inconclusive." },
+  { id: "incon", kind: "diamond", x: 295, y: 758, w: 210, h: 64, tone: "slate", title: "inconclusive?",
+    desc: "The interval straddles m. More samples may resolve it, within max_runs." },
+  { id: "budget", kind: "diamond", x: 690, y: 758, w: 180, h: 64, tone: "amber", title: "runs < max?",
+    desc: "Extra runs are granted while runs used is below stats.max_runs. Each grant is clamped to at most 3 runs." },
+  { id: "extra", x: 600, y: 862, w: 280, h: 48, tone: "red", title: "extra runs $$$",
+    lines: ["brain or 2 · clamp ≤ 3 · re-classify"],
+    desc: "The extra_runs callback (fallback 2) is clamped, measured on the same SHA and appended. A skip here labels the commit skipped." },
+  { id: "ambig", x: 600, y: 940, w: 280, h: 48, tone: "slate", title: "label ambiguous",
+    lines: ["boundaries unchanged"],
+    desc: "Samples are kept and the boundary does not move. Like a skip, it widens the final answer to a culprit_range." },
+  { id: "move", x: 275, y: 848, w: 250, h: 48, tone: "blue", title: "Move boundary",
+    lines: ["decisive → good_idx or bad_idx · step + 1"],
+    desc: "Only decisive verdicts move a boundary and count as a step." },
+  { id: "drift", kind: "diamond", x: 305, y: 916, w: 190, h: 64, tone: "slate", title: "step % 4 = 0?",
+    desc: "A drift check runs every 4 decisive steps (drift_every)." },
+  { id: "dchk", x: 30, y: 920, w: 210, h: 56, tone: "amber", title: "Drift recheck $$$",
+    lines: ["good ×2 · drift > 2% → re-measure ends"],
+    desc: "Re-runs the current good boundary. If the rig drifted more than 2%, both boundaries are re-measured and the regression re-confirmed. If the regression vanished, the run stops as no_regression." },
+  { id: "verify", x: 30, y: 470, w: 210, h: 52, tone: "red", title: "Verify vs parent $$$",
+    lines: ["back-to-back · same sign as R"],
+    desc: "The culprit against its parent, max_runs each. A failed or skipped verify keeps the culprit but sets verified to false with a reason." },
+  { id: "report", x: 30, y: 546, w: 210, h: 48, tone: "green", title: "events + report.html",
+    lines: ["culprit · run_end · render"],
+    desc: "The driver appends culprit and run_end events, then renders report.html from events.jsonl." },
+  { id: "done", kind: "term", x: 30, y: 618, w: 210, h: 40, title: "done",
+    desc: "The run directory holds config.yaml, events.jsonl and report.html. Re-render any time with perfpilot report." },
+  { id: "loop", kind: "pill", x: 300, y: 1012, w: 200, h: 30, title: "1 · back to open range check",
+    desc: "Shared loop return. Skipped, ambiguous, decisive and drift-checked commits all re-enter the open-range check." },
+];
+
+const FLOW_EDGES = [
+  { d: "M400,54 L400,74" },
+  { d: "M400,124 L400,144" },
+  { d: "M400,196 L400,214" },
+  { d: "M295,246 L240,246", label: "no", lx: 268, ly: 240, color: "#BD4A30" },
+  { d: "M400,278 L400,300", label: "yes", lx: 418, ly: 292, color: "#5B6F00" },
+  { d: "M295,332 L240,332", label: "no", lx: 268, ly: 326, color: "#BD4A30" },
+  { d: "M400,364 L400,384", label: "yes", lx: 418, ly: 376, color: "#5B6F00" },
+  { d: "M295,416 L240,416", label: "no", lx: 268, ly: 410, color: "#72726E" },
+  { d: "M400,448 L400,470", label: "yes", lx: 418, ly: 460, color: "#5B6F00" },
+  { d: "M400,518 L400,536" },
+  { d: "M400,588 L400,608" },
+  { d: "M505,640 L600,640", label: "no", lx: 552, ly: 634, color: "#BD4A30" },
+  { d: "M400,672 L400,690", label: "yes", lx: 418, ly: 682, color: "#5B6F00" },
+  { d: "M400,738 L400,758" },
+  { d: "M505,790 L690,790", label: "yes", lx: 598, ly: 782, color: "#B26A00" },
+  { d: "M400,822 L400,848", label: "no", lx: 418, ly: 838, color: "#72726E" },
+  { d: "M780,822 L780,862", label: "yes", lx: 798, ly: 846, color: "#B26A00" },
+  { d: "M870,790 L930,790 L930,964 L880,964", label: "no", lx: 904, ly: 784, color: "#72726E" },
+  { d: "M400,896 L400,916" },
+  { d: "M305,948 L240,948", label: "yes", lx: 272, ly: 940, color: "#B26A00" },
+  { d: "M400,980 L400,1012", label: "no", lx: 418, ly: 998, color: "#72726E" },
+  { d: "M135,436 L135,470" },
+  { d: "M135,522 L135,546" },
+  { d: "M135,594 L135,618" },
+];
+
+const FLOW_BADGES = [
+  [588, 616, "1"],
+  [588, 862, "2"],
+  [588, 940, "1"],
+  [22, 920, "1"],
+  [287, 1027, "1"],
+];
+
+function Flowchart() {
+  const [hover, setHover] = useState(null);
+  return (
+    <figure>
+      <div className="svgwrap">
+        <svg viewBox="0 0 1000 1060" role="img" aria-label="Bisect flowchart for one run">
+          <defs>{marker("fa", "#292929")}</defs>
+          {FLOW_NODES.map(n => {
+            if (n.kind === "diamond") return <Diamond key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />;
+            if (n.kind === "term" || n.kind === "pill") return (
+              <g key={n.id} className={"node" + (hover && hover.id === n.id ? " active" : "")} tabIndex={0}
+                 onMouseEnter={() => setHover(n)} onMouseLeave={() => setHover(null)}
+                 onFocus={() => setHover(n)} onBlur={() => setHover(null)}>
+                <rect className="body" x={n.x} y={n.y} width={n.w} height={n.h} rx={n.h / 2}
+                      fill={n.kind === "term" ? "#292929" : "#FFFFFF"} stroke="#292929" strokeWidth={n.kind === "term" ? 0 : 1.3} />
+                <text x={n.x + n.w / 2} y={n.y + n.h / 2 + 4} textAnchor="middle" fontSize="12.5" fontWeight="500"
+                      fontFamily="IBM Plex Sans, sans-serif" fill={n.kind === "term" ? "#FFFFFF" : "#292929"}>{n.title}</text>
+              </g>
+            );
+            return <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />;
+          })}
+          {FLOW_EDGES.map((e, i) => <Edge key={i} id="fa" {...e} />)}
+          {FLOW_BADGES.map(([x, y, n], i) => <Badge key={i} x={x} y={y} n={n} />)}
+          <text x="960" y="1040" textAnchor="end" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">1 loop return · 2 same-SHA resample</text>
+        </svg>
+      </div>
+      <Key items={[["red", "spends GPU"], ["amber", "bounded salvage"], ["green", "verdict or exit"], ["slate", "decision or label"], ["blue", "search step"]]} />
+      <Readout node={hover} />
+      <figcaption>One bisect run, as run_bisect executes it. The spine is the search; the left column is where a run
+      ends. Every loop is bounded by finite commits, max_runs, and at most 3 extra runs per grant. Every exit still
+      writes events.</figcaption>
+    </figure>
+  );
+}
+
+/* ---------- 04 · tune ---------- */
+const TUNE_STEPS = [
+  ["Baseline quality", "Score the 50-question bank on the base commit. Every accuracy check is relative to this."],
+  ["Rank knobs", "The brain orders the knob grid. A rejected or failed call keeps config order."],
+  ["Propose one change", "One knob moves at a time from the best config. Duplicates and no-op values are rejected."],
+  ["Measure and accept", "tune_accepts requires the interval to sit fully above +2%, and p99 TTFT to stay within 10%."],
+  ["Quality gate", "Numeric knobs such as kv_cache_dtype must stay within 2 points. The final config is re-checked, and a failure reverts it."],
+];
+
+/* ---------- 05 · decisions ---------- */
+const DECISIONS = [
+  ["The brain decides, never measures.", "Every number comes from a GPU trial. The LLM proposes commits, extra-run counts, knob order and one-knob changes. Each answer is schema-validated and range-checked, with a deterministic fallback logged as an agent_call event."],
+  ["Same GPU, every time.", "A pinned A100-40GB and one warm container (max_containers=1) for the whole run. The GPU UUID is re-checked on every trial, so a change is an error, never a comparison. Warmup runs before measured runs."],
+  ["Fail loudly, log everything.", "Secrets come from env only. Thirteen typed event types record ok, skip and error trial states, and endpoint_error and culprit_range outcomes. Nothing is silent or zero-filled."],
+  ["Quality is a gate, not a metric.", "Numeric knobs and the final TuneSmith config must stay within 2 points of baseline accuracy on the 50-question bank. Speed that costs quality is reverted."],
+];
+
+const MILESTONES = [
+  ["M0 · layout, config, stats, stubs", "ok", "green", "11 pytest passed, $0 GPU"],
+  ["M1 · GPU worker trial", "ok", "green", "trial ok, ~3300–3900 tok/s, A100-40GB"],
+  ["M2 · bisect driver + logic", "wait", "logic green · GPU pending quota", "drivers proven on fakes; frozen 16-commit range"],
+  ["M3 · agent brain", "wait", "wired · live probe passed", "Baseten ok via complete_validated"],
+  ["M4 · tune + verify/explain", "wait", "logic green · GPU pending", "enforce-eager injection reproduces ~70% drop"],
+  ["M5 · report / watch / README", "wait", "in progress", "7 recorded runs re-render; partial run degrades honestly"],
+];
+
+function useActiveSection() {
+  const [active, setActive] = useState("planes");
+  useEffect(() => {
+    const onScroll = () => {
+      let cur = "planes";
+      for (const [id] of SECTIONS) {
+        const el = document.getElementById(id);
+        if (el && el.getBoundingClientRect().top < 160) cur = id;
+      }
+      setActive(cur);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  return active;
+}
+
+function App() {
+  const active = useActiveSection();
+  return (
+    <div className="page" id="top">
+      <Rail active={active} />
+      <main>
+        <header className="lede-block">
+          <h1>PerfPilot finds the commit that slowed vLLM, then proves it.</h1>
+          <p>An agent for vLLM performance. PerfBisect locates the first slow commit. TuneSmith recovers speed
+          through serve flags. Every verdict rests on a measured interval, and the brain only proposes.</p>
+          <dl className="facts">
+            <div><dt>Tests</dt><dd>153 passing</dd></div>
+            <div><dt>Metered GPU</dt><dd>A100-40GB, $2.10/h</dd></div>
+            <div><dt>Local logic</dt><dd>$0, no GPU</dd></div>
+            <div><dt>Advisor</dt><dd>muse-spark-open on Baseten</dd></div>
+          </dl>
+        </header>
+
+        <section id="planes">
+          <h2>Two planes</h2>
+          <p className="intro">A local control plane decides and proves. A metered GPU plane produces the numbers.</p>
+          <Planes />
+        </section>
+
+        <section id="modules">
+          <h2>Module contracts</h2>
+          <p className="intro">Each box names its file and what crosses the boundary. Hover or focus a box for the reason it exists.</p>
+          <Modules />
+        </section>
+
+        <section id="bisect">
+          <h2>Bisect flow</h2>
+          <p className="intro">One run, top to bottom. Only trials and verify spend money.</p>
+          <Flowchart />
+        </section>
+
+        <section id="tune">
+          <h2>TuneSmith flow</h2>
+          <p className="intro">One knob at a time from the best config. Speed has to clear a statistical bar, and quality has to hold.</p>
+          <ol className="steps">
+            {TUNE_STEPS.map(([h, p]) => (
+              <li key={h}><div><b>{h}</b><span>{p}</span></div></li>
+            ))}
+          </ol>
+        </section>
+
+        <section id="decisions">
+          <h2>Design decisions</h2>
+          <dl className="decisions">
+            {DECISIONS.map(([h, p]) => (
+              <div key={h}><dt>{h}</dt><dd>{p}</dd></div>
+            ))}
+          </dl>
+        </section>
+
+        <section id="status">
+          <h2>Milestone status</h2>
+          <p className="intro">What is built and what waits on GPU quota.</p>
+          <table className="status">
+            <thead><tr><th>Milestone</th><th>State</th><th>Proof</th></tr></thead>
+            <tbody>
+              {MILESTONES.map(([m, cls, state, proof]) => (
+                <tr key={m}><td>{m}</td><td className={cls}>{state}</td><td><code>{proof}</code></td></tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <footer>
+          PerfPilot · Meta Global AI Developer Hackathon. Regenerate any run report with <code>perfpilot report runs/&lt;id&gt;</code>.
+        </footer>
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

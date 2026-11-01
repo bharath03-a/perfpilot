@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# uv
+.uv/
+
+# pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# PerfPilot runs (GPU artifacts, local only)
+runs/
+*.jsonl
+
+# Secrets / local config overrides
+.env
+perfpilot.local.yaml
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
