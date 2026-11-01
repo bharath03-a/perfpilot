@@ -171,6 +171,18 @@ def _synthetic_events(run_id: str = "eval0") -> list[dict]:
             "passed": True,
             "accuracy_drop_pts": 0,
         },
+        {
+            "ts": "t15b",
+            "run_id": run_id,
+            "type": "tune_result",
+            "confirmed": True,
+            "best": {"max_num_seqs": 256},
+            "uplift_effect": 0.06,
+            "uplift_lo": 0.03,
+            "uplift_hi": 0.09,
+            "serve_command": "vllm serve glimmer --max-num-seqs 256",
+            "model": "glimmer",
+        },
         {"ts": "t16", "run_id": run_id, "type": "run_end", "status": "done"},
     ]
 
@@ -370,3 +382,97 @@ def test_quality_rows_show_accuracy_and_reason(tmp_path: Path):
     html_doc = render_report(_write_events(tmp_path, events))
     assert "0.91" in html_doc and "0.93" in html_doc
     assert "within 2pt gate" in html_doc
+
+
+def test_verdict_card_reads_driver_culprit_shape(tmp_path: Path):
+    """Real driver culprit events carry culprit/culprit_range/verified and
+    no effect: the card must show the SHA and a derived regression."""
+    events = [
+        {"ts": "t0", "run_id": "r", "type": "run_start", "gpu_cost_per_hour": 2.10},
+        {
+            "ts": "t1",
+            "run_id": "r",
+            "type": "trial_result",
+            "sha": "goodsha",
+            "status": "ok",
+            "runs": [3600.0, 3580.0, 3620.0],
+        },
+        {
+            "ts": "t2",
+            "run_id": "r",
+            "type": "trial_result",
+            "sha": "badsha",
+            "status": "ok",
+            "runs": [1800.0, 1790.0, 1810.0],
+        },
+        {
+            "ts": "t3",
+            "run_id": "r",
+            "type": "culprit",
+            "culprit": "badsha",
+            "culprit_range": ["badsha"],
+            "verified": False,
+            "steps": 0,
+        },
+        {"ts": "t4", "run_id": "r", "type": "run_end", "status": "culprit_range"},
+    ]
+    html_doc = render_report(_write_events(tmp_path, events))
+    assert "badsha" in html_doc
+    assert "n/a" not in html_doc.split("Regression")[1].split("</p>")[0]
+    assert "derived from endpoint trials" in html_doc
+
+
+def test_report_merges_sibling_agent_events(tmp_path: Path):
+    """agent-events.jsonl beside events.jsonl feeds the agent panel."""
+    events = [
+        {"ts": "t0", "run_id": "r", "type": "run_start", "gpu_cost_per_hour": 2.10},
+        {"ts": "t1", "run_id": "r", "type": "run_end", "status": "done"},
+    ]
+    p = _write_events(tmp_path, events)
+    agent = [
+        {
+            "ts": "t0b",
+            "run_id": "r",
+            "type": "agent_call",
+            "decision": "propose_config",
+            "proposal": {"knob": "max_num_seqs", "value": 256},
+            "accepted": True,
+            "why": "raise concurrency",
+        }
+    ]
+    (tmp_path / "agent-events.jsonl").write_text(
+        "\n".join(json.dumps(e) for e in agent) + "\n"
+    )
+    html_doc = render_report(p)
+    assert "propose_config" in html_doc
+    assert "raise concurrency" in html_doc
+    assert "No agent calls logged" not in html_doc
+
+
+def test_tune_no_winner_renders_baseline_kept(tmp_path: Path):
+    events = [
+        {"ts": "t0", "run_id": "r", "type": "run_start", "gpu_cost_per_hour": 2.10},
+        {
+            "ts": "t1",
+            "run_id": "r",
+            "type": "tune_candidate",
+            "knob": "kv_cache_dtype",
+            "value": "fp8",
+            "config": {"kv_cache_dtype": "fp8"},
+            "reason": "measure failed: RuntimeError",
+        },
+        {
+            "ts": "t2",
+            "run_id": "r",
+            "type": "tune_result",
+            "confirmed": False,
+            "best": {},
+            "serve_command": "",
+            "model": "glimmer",
+        },
+        {"ts": "t3", "run_id": "r", "type": "run_end", "status": "done"},
+    ]
+    html_doc = render_report(_write_events(tmp_path, events))
+    assert "Baseline kept" in html_doc
+    assert "Winner: <code>{}</code>" not in html_doc
+    assert "<model>" not in html_doc

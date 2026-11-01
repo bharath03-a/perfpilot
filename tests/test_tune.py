@@ -263,3 +263,71 @@ def test_serve_command_shape():
     assert "--max-num-seqs 256" in cmd
     assert "--enable-prefix-caching" in cmd
     assert "async-scheduling" not in cmd
+
+
+def test_measure_failure_rejects_candidate_and_continues():
+    base = make_measure()
+    seen: list[dict] = []
+
+    def measure(config: dict[str, Any], runs: int) -> TuneTrial:
+        if config.get("max_num_seqs") == 256:
+            seen.append(dict(config))
+            raise RuntimeError("transient serve crash")
+        return base(config, runs)
+
+    out = run_tuning(BASELINE, SPACE, measure, accuracy_for, model="glimmer")
+    assert seen, "failing config was never tried"
+    reasons = [c.reason for c in out.candidates]
+    assert any("measure failed" in r for r in reasons)
+    assert out.best_config, "run must still produce a best config"
+    assert out.trials_used > 0
+
+
+def test_quality_failure_rejects_candidate_fail_closed():
+    def quality(config: dict[str, Any]) -> float:
+        if config.get("kv_cache_dtype") == "fp8":
+            raise RuntimeError("answer_batch down")
+        return accuracy_for(config)
+
+    out = run_tuning(BASELINE, SPACE, make_measure(), quality, model="glimmer")
+    assert out.best_config.get("kv_cache_dtype") != "fp8"
+    assert any("quality failed" in c.reason for c in out.candidates)
+    assert not any(
+        c.decision == "accepted" and c.config.get("kv_cache_dtype") == "fp8"
+        for c in out.candidates
+    )
+
+
+def test_confirm_failure_yields_unconfirmed_not_crash():
+    base = make_measure()
+
+    def measure(config: dict[str, Any], runs: int) -> TuneTrial:
+        if runs >= 8:
+            raise RuntimeError("confirm serve crash")
+        return base(config, runs)
+
+    out = run_tuning(BASELINE, SPACE, measure, accuracy_for, model="glimmer")
+    assert out.best_config
+    assert out.confirmed is False
+    assert "unevaluated" in out.confirm_reason
+
+
+def test_nan_samples_become_rejections_not_crash():
+    base = make_measure()
+
+    def measure(config: dict[str, Any], runs: int) -> TuneTrial:
+        trial = base(config, runs)
+        if config.get("max_num_seqs") == 256:
+            trial = TuneTrial(
+                samples=[float("nan")] * runs, p99_ttft_ms=trial.p99_ttft_ms
+            )
+        return trial
+
+    out = run_tuning(BASELINE, SPACE, measure, accuracy_for, model="glimmer")
+    nan_recs = [c for c in out.candidates if c.config.get("max_num_seqs") == 256]
+    assert nan_recs
+    assert all("verdict failed" in c.reason for c in nan_recs)
+    assert not any(
+        c.decision == "accepted" and c.config.get("max_num_seqs") == 256
+        for c in out.candidates
+    )

@@ -276,7 +276,23 @@ def verify_culprit(
     confidence: float = 0.90,
 ) -> VerifyResult:
     """Back-to-back check: significant and in the same direction as R."""
-    iv = log_ratio_interval(list(culprit_samples), list(ref_samples), confidence)
+    try:
+        iv = log_ratio_interval(list(culprit_samples), list(ref_samples), confidence)
+    except ValueError as exc:
+        return VerifyResult(
+            verified=False,
+            ref=ref or None,
+            reason=f"verify samples invalid: {exc}",
+        )
+    if iv.lo == iv.hi:
+        return VerifyResult(
+            effect=iv.effect,
+            lo=iv.lo,
+            hi=iv.hi,
+            ref=ref or None,
+            verified=False,
+            reason="verify samples have zero variance: not counted",
+        )
     if iv.lo <= 0.0 <= iv.hi:
         return VerifyResult(
             effect=iv.effect,
@@ -317,6 +333,25 @@ def _spread(samples: list[float]) -> float:
     if mean == 0:
         return float("inf")
     return (max(samples) - min(samples)) / abs(mean)
+
+
+def _safe_classify(
+    samples: list[float], good: list[float], full_effect: float, confidence: float
+) -> Verdict:
+    """classify_commit that never raises: invalid samples become
+    inconclusive so the extra-runs loop (or the ambiguous label) handles
+    them instead of crashing the run."""
+    try:
+        return classify_commit(samples, good, full_effect, confidence)
+    except ValueError as exc:
+        return Verdict(
+            label="inconclusive",
+            effect=0.0,
+            lo=0.0,
+            hi=0.0,
+            confidence=confidence,
+            reason=f"commit samples invalid: {exc}",
+        )
 
 
 def _outcome_lists(state: BisectState) -> tuple[list[str], list[str]]:
@@ -422,9 +457,12 @@ def run_bisect(
     state.labels[good_sha] = CommitLabel.GOOD
     state.labels[bad_sha] = CommitLabel.BAD
 
-    verdict = confirm_regression(
-        state.samples[bad_sha], state.samples[good_sha], p.confidence
-    )
+    try:
+        verdict = confirm_regression(
+            state.samples[bad_sha], state.samples[good_sha], p.confidence
+        )
+    except ValueError as exc:
+        return snapshot("no_regression", False, f"endpoint samples invalid: {exc}")
     if verdict.label == "no_regression":
         return snapshot("no_regression", False, verdict.reason)
     state.full_effect = verdict.effect
@@ -443,7 +481,7 @@ def run_bisect(
             continue
         samples = list(trial.samples)
         runs_used = p.min_runs
-        verdict = classify_commit(
+        verdict = _safe_classify(
             samples,
             state.samples[items[state.good_idx]],
             state.full_effect,
@@ -467,7 +505,7 @@ def run_bisect(
             samples.extend(more.samples)
             runs_used += granted
             state.extra_runs_used += granted
-            verdict = classify_commit(
+            verdict = _safe_classify(
                 samples,
                 state.samples[items[state.good_idx]],
                 state.full_effect,
@@ -504,11 +542,18 @@ def run_bisect(
                     fresh_good = measured(cur_good, p.min_runs)
                     fresh_bad = measured(cur_bad, p.min_runs)
                     if _fresh(fresh_good) and _fresh(fresh_bad):
-                        reconfirm = confirm_regression(
-                            list(fresh_bad.samples),
-                            list(fresh_good.samples),
-                            p.confidence,
-                        )
+                        try:
+                            reconfirm = confirm_regression(
+                                list(fresh_bad.samples),
+                                list(fresh_good.samples),
+                                p.confidence,
+                            )
+                        except ValueError as exc:
+                            return snapshot(
+                                "no_regression",
+                                False,
+                                f"drift recheck samples invalid: {exc}",
+                            )
                         if reconfirm.label == "no_regression":
                             return snapshot(
                                 "no_regression",

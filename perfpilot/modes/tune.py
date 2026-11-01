@@ -285,16 +285,43 @@ def run_tuning(
             continue
         cand = dict(check.candidate)
         tried.add(config_key(cand))
-        trial = measure(dict(cand), p.min_runs)
+        try:
+            trial = measure(dict(cand), p.min_runs)
+        except Exception as exc:
+            trials_used += 1
+            reason = f"measure failed: {type(exc).__name__}"
+            propose_log.append(f"rejected {proposal.knob}={proposal.value!r}: {reason}")
+            candidates.append(
+                CandidateRecord(
+                    knob=proposal.knob,
+                    value=proposal.value,
+                    config=cand,
+                    reason=reason,
+                )
+            )
+            continue
         trials_used += 1
-        verdict = tune_accepts(
-            list(trial.samples),
-            list(best_trial.samples),
-            trial.p99_ttft_ms,
-            best_trial.p99_ttft_ms,
-            p.confidence,
-            p.min_uplift,
-        )
+        try:
+            verdict = tune_accepts(
+                list(trial.samples),
+                list(best_trial.samples),
+                trial.p99_ttft_ms,
+                best_trial.p99_ttft_ms,
+                p.confidence,
+                p.min_uplift,
+            )
+        except ValueError as exc:
+            reason = f"verdict failed: {type(exc).__name__}: {exc}"
+            propose_log.append(f"rejected {proposal.knob}={proposal.value!r}: {reason}")
+            candidates.append(
+                CandidateRecord(
+                    knob=proposal.knob,
+                    value=proposal.value,
+                    config=cand,
+                    reason=reason,
+                )
+            )
+            continue
         if verdict.label != "good":
             candidates.append(
                 CandidateRecord(
@@ -309,9 +336,23 @@ def run_tuning(
             )
             continue
         if proposal.knob in p.quality_knobs:
-            record = quality_passes(
-                quality(dict(cand)), base_acc, p.max_accuracy_drop_pts
-            )
+            try:
+                candidate_acc = quality(dict(cand))
+            except Exception as exc:
+                reason = f"quality failed: {type(exc).__name__}"
+                propose_log.append(
+                    f"rejected {proposal.knob}={proposal.value!r}: {reason}"
+                )
+                candidates.append(
+                    CandidateRecord(
+                        knob=proposal.knob,
+                        value=proposal.value,
+                        config=cand,
+                        reason=reason,
+                    )
+                )
+                continue
+            record = quality_passes(candidate_acc, base_acc, p.max_accuracy_drop_pts)
             record.config = dict(cand)
             quality_checks.append(record)
             checked.add(config_key(cand))
@@ -347,7 +388,18 @@ def run_tuning(
         )
 
     if config_key(best) not in checked:
-        record = quality_passes(quality(dict(best)), base_acc, p.max_accuracy_drop_pts)
+        try:
+            best_acc = quality(dict(best))
+        except Exception as exc:
+            best_acc = None
+            propose_log.append(f"final quality failed: {type(exc).__name__}")
+        if best_acc is None:
+            record = QualityRecord(
+                passed=False,
+                reason="final quality failed: unevaluated",
+            )
+        else:
+            record = quality_passes(best_acc, base_acc, p.max_accuracy_drop_pts)
         record.config = dict(best)
         quality_checks.append(record)
         checked.add(config_key(best))
@@ -374,11 +426,46 @@ def run_tuning(
             rejections=rejections,
             propose_log=list(propose_log),
         )
-    confirm_best = measure(dict(best), p.max_runs)
-    confirm_base = measure(dict(baseline), p.max_runs)
-    iv = log_ratio_interval(
-        list(confirm_best.samples), list(confirm_base.samples), p.confidence
-    )
+    try:
+        confirm_best = measure(dict(best), p.max_runs)
+        confirm_base = measure(dict(baseline), p.max_runs)
+    except Exception as exc:
+        propose_log.append(f"confirmation failed: {type(exc).__name__}")
+        return TuneOutcome(
+            baseline_config=dict(baseline),
+            best_config=dict(best),
+            trials_used=trials_used,
+            candidates=candidates,
+            quality_checks=quality_checks,
+            stopped_reason=stopped_reason,
+            serve_command=serve_command(model, best),
+            confirm_reason="confirmation unmeasurable: unevaluated",
+            fallbacks=fallbacks,
+            rejections=rejections,
+            propose_log=list(propose_log),
+        )
+    try:
+        iv = log_ratio_interval(
+            list(confirm_best.samples), list(confirm_base.samples), p.confidence
+        )
+    except ValueError as exc:
+        return TuneOutcome(
+            baseline_config=dict(baseline),
+            best_config=dict(best),
+            uplift_effect=0.0,
+            uplift_lo=0.0,
+            uplift_hi=0.0,
+            confirmed=False,
+            confirm_reason=f"confirmation samples invalid: {exc}",
+            trials_used=trials_used,
+            candidates=candidates,
+            quality_checks=quality_checks,
+            stopped_reason=stopped_reason,
+            serve_command=serve_command(model, best),
+            fallbacks=fallbacks,
+            rejections=rejections,
+            propose_log=list(propose_log),
+        )
     confirmed = iv.lo > p.min_uplift
     return TuneOutcome(
         baseline_config=dict(baseline),

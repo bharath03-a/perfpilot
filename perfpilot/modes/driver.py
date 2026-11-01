@@ -53,11 +53,52 @@ def modal_measure_factory(
             return TrialOutcome(
                 skipped=True, reason=f"trial error: {result.get('reason', '')}"
             )
-        return TrialOutcome(
-            samples=[r["output_throughput"] for r in result.get("runs", [])]
-        )
+        runs_out = result.get("runs", []) or []
+        valid = [
+            r
+            for r in runs_out
+            if isinstance(r, dict) and not r.get("failed_requests", 0)
+        ]
+        if not valid and runs_out:
+            return TrialOutcome(skipped=True, reason="all runs had failed requests")
+        return TrialOutcome(samples=[r["output_throughput"] for r in valid])
 
     return measure
+
+
+def _valid_throughputs(runs_out: list[dict[str, Any]]) -> list[float]:
+    """Throughputs of runs with zero failed requests (SPEC: any failed
+    requests invalidate the run)."""
+    return [
+        float(r["output_throughput"])
+        for r in runs_out
+        if isinstance(r, dict)
+        and not r.get("failed_requests", 0)
+        and isinstance(r.get("output_throughput"), (int, float))
+    ]
+
+
+def _emit_bisect_verdicts(log: EventLog, outcome: BisectOutcome) -> None:
+    """One ``verdict`` event per tested commit so the report timeline can
+    show labels. ``BisectOutcome.labels`` carries the final label."""
+    for sha in outcome.tested_order:
+        label = outcome.labels.get(sha, "untested")
+        log.emit("verdict", sha=sha, label=str(label))
+
+
+def _emit_culprit(log: EventLog, outcome: BisectOutcome) -> None:
+    """Culprit event in both the historic (sha/effect) and driver
+    (culprit/culprit_range/verified) shapes."""
+    log.emit(
+        "culprit",
+        sha=outcome.culprit,
+        culprit=outcome.culprit,
+        culprit_range=list(outcome.culprit_range or []),
+        verified=outcome.verified,
+        effect=outcome.full_effect,
+        status=outcome.status,
+        steps=outcome.steps,
+    )
 
 
 def drive_eval_trial(
@@ -117,24 +158,43 @@ def drive_eval_trial(
             "trial_result",
             sha=rec["sha"],
             runs_requested=rec["runs"],
-            runs=[r.get("output_throughput") for r in res.get("runs", [])],
+            runs=_valid_throughputs(res.get("runs", []) or []),
             status=res.get("status"),
             reason=res.get("reason", ""),
             gpu_uuid=res.get("gpu_uuid"),
             gpu_seconds=res.get("gpu_seconds"),
         )
-    log.emit(
-        "culprit",
-        culprit=outcome.culprit,
-        culprit_range=outcome.culprit_range,
-        verified=outcome.verified,
-        steps=outcome.steps,
-    )
+    uuids = {r["result"].get("gpu_uuid") for r in records} - {None}
+    if len(uuids) > 1:
+        log.emit(
+            "run_end",
+            status="endpoint_error",
+            reason=f"GPU changed mid-run: {sorted(uuids)}",
+        )
+        html = render_mod.render_report(events_path)
+        run_dir_mod.finalize_report(run_dir, html)
+        gpu_seconds = sum(r["result"].get("gpu_seconds", 0.0) for r in records)
+        return {
+            "run_id": run_id,
+            "run_dir": str(run_dir),
+            "status": "endpoint_error",
+            "culprit": None,
+            "expected": commits[culprit_index],
+            "correct": False,
+            "verified": False,
+            "steps": outcome.steps,
+            "extra_runs_used": outcome.extra_runs_used,
+            "verdicts": [],
+            "n_trials": len(records),
+            "unique_gpus": len(uuids),
+            "gpu_seconds": gpu_seconds,
+            "cost_usd": gpu_seconds / 3600.0 * gpu_cost_per_hour,
+        }
+    _emit_bisect_verdicts(log, outcome)
+    _emit_culprit(log, outcome)
     log.emit("run_end", status=outcome.status)
     html = render_mod.render_report(events_path)
     run_dir_mod.finalize_report(run_dir, html)
-
-    uuids = {r["result"].get("gpu_uuid") for r in records}
     gpu_seconds = sum(r["result"].get("gpu_seconds", 0.0) for r in records)
     expected = commits[culprit_index]
     correct = outcome.culprit == expected or (
@@ -167,8 +227,15 @@ def drive_bisect_live(
     extra_runs=None,
     runs_root: str = "runs",
     gpu_cost_per_hour: float = 2.10,
+    explain_fn=None,
+    repo: str = "vllm-project/vllm",
 ) -> dict[str, Any]:
-    """Real (non-eval) bisect: no injection, no hidden culprit."""
+    """Real (non-eval) bisect: no injection, no hidden culprit.
+
+    ``explain_fn`` maps (sha, message, diff_paths, stats) to a
+    {summary, mechanism, files, confidence} mapping or None; any failure
+    (fetch or brain) skips the explanation without failing the run.
+    """
     from perfpilot.modes import run_bisect as _run_bisect
 
     run_dir = run_dir_mod.write_run_skeleton(
@@ -181,21 +248,43 @@ def drive_bisect_live(
         mode="bisect",
         n_commits=len(commits),
         gpu_cost_per_hour=gpu_cost_per_hour,
+        repo=repo,
     )
+    samples_by_sha: dict[str, list[float]] = {}
+
+    def recording_measure(sha: str, runs: int) -> TrialOutcome:
+        trial = measure(sha, runs)
+        if not trial.skipped:
+            samples_by_sha.setdefault(sha, []).extend(trial.samples)
+        log.emit(
+            "trial_result",
+            sha=sha,
+            runs_requested=runs,
+            runs=list(trial.samples),
+            status="skip" if trial.skipped else "ok",
+            reason=trial.reason,
+        )
+        return trial
+
     outcome: BisectOutcome = _run_bisect(
         commits,
-        measure,
+        recording_measure,
         params=params or BisectParams(),
         pick=pick,
         extra_runs=extra_runs,
     )
-    log.emit(
-        "culprit",
-        culprit=outcome.culprit,
-        culprit_range=outcome.culprit_range,
-        verified=outcome.verified,
-        steps=outcome.steps,
-    )
+    for sha in outcome.tested_order:
+        label = outcome.labels.get(sha, "untested")
+        samples = samples_by_sha.get(sha, [])
+        log.emit(
+            "verdict",
+            sha=sha,
+            label=str(label),
+            mean=(sum(samples) / len(samples) if samples else None),
+        )
+    _emit_culprit(log, outcome)
+    if outcome.culprit and explain_fn is not None:
+        _maybe_explain(log, commits, outcome, samples_by_sha, explain_fn, repo)
     log.emit("run_end", status=outcome.status)
     html = render_mod.render_report(events_path)
     run_dir_mod.finalize_report(run_dir, html)
@@ -210,6 +299,48 @@ def drive_bisect_live(
     }
 
 
+def _maybe_explain(
+    log: EventLog,
+    commits: list[str],
+    outcome: BisectOutcome,
+    samples_by_sha: dict[str, list[float]],
+    explain_fn,
+    repo: str,
+) -> None:
+    """Fetch the culprit diff and ask the brain why; failures skip the
+    explanation event without failing the run."""
+    from perfpilot.git_info import commit_diff_paths
+
+    sha = outcome.culprit or ""
+    try:
+        message, paths = commit_diff_paths(repo, sha)
+        good_samples = [
+            s
+            for c, samples in samples_by_sha.items()
+            for s in samples
+            if outcome.labels.get(c) == "good"
+        ]
+        bad_samples = samples_by_sha.get(sha, [])
+        stats = {
+            "good_mean": sum(good_samples) / len(good_samples) if good_samples else 0.0,
+            "bad_mean": sum(bad_samples) / len(bad_samples) if bad_samples else 0.0,
+            "effect": outcome.full_effect,
+        }
+        rec = explain_fn(sha, message, paths, stats)
+    except Exception:
+        return
+    if not rec:
+        return
+    log.emit(
+        "explain",
+        sha=sha,
+        summary=rec.get("summary", ""),
+        mechanism=rec.get("mechanism", ""),
+        files=list(rec.get("files", []) or []),
+        confidence=rec.get("confidence", ""),
+    )
+
+
 def drive_tune_live(
     base_commit: str,
     knob_space: dict[str, list[Any]],
@@ -220,6 +351,7 @@ def drive_tune_live(
     propose=None,
     runs_root: str = "runs",
     gpu_cost_per_hour: float = 2.10,
+    model: str = "",
 ) -> dict[str, Any]:
     """Real TuneSmith run with events + report. Returns summary."""
     run_dir = run_dir_mod.write_run_skeleton(
@@ -270,6 +402,16 @@ def drive_tune_live(
             reason=qr.reason,
         )
     log.emit("run_end", status="confirmed" if outcome.confirmed else "done")
+    log.emit(
+        "tune_result",
+        confirmed=bool(outcome.confirmed),
+        best=dict(outcome.best_config),
+        uplift_effect=outcome.uplift_effect,
+        uplift_lo=outcome.uplift_lo,
+        uplift_hi=outcome.uplift_hi,
+        serve_command=outcome.serve_command,
+        model=model,
+    )
     html = render_mod.render_report(events_path)
     run_dir_mod.finalize_report(run_dir, html)
     return {

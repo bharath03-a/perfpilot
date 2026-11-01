@@ -361,7 +361,7 @@ function Modules() {
           <Edge id="da" color="#BD4A30" d="M500,490 L500,526" label="run_trial · answer_batch $$$ → TrialResult" lx={590} ly={512} />
           <Edge id="da" d="M500,618 L500,636" label="events → render" lx={560} ly={630} />
           <rect x="10" y="640" width="980" height="100" rx="6" fill="#F2F6E1" stroke="#5B6F00" strokeWidth="1.2" />
-          <text x="500" y="668" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="IBM Plex Sans, sans-serif" fill="#292929">Evidence · runs/&lt;run-id&gt;/events.jsonl (13 event types) → render.py → report.html</text>
+          <text x="500" y="668" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="IBM Plex Sans, sans-serif" fill="#292929">Evidence · runs/&lt;run-id&gt;/events.jsonl (14 event types) → render.py → report.html</text>
           <text x="500" y="688" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">config.yaml · agent-events.jsonl · results/&lt;sha&gt;__&lt;flags&gt;/ · logs/ · fix.patch if drafted</text>
           <text x="500" y="706" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">perfpilot report re-renders offline · watch adds a 5s auto-reload · partial runs render honestly</text>
         </svg>
@@ -535,10 +535,10 @@ const DECISIONS = [
 const MILESTONES = [
   ["M0 · layout, config, stats, stubs", "ok", "green", "11 pytest passed, $0 GPU"],
   ["M1 · GPU worker trial", "ok", "green", "trial ok, ~3300–3900 tok/s, A100-40GB"],
-  ["M2 · bisect driver + logic", "wait", "logic green · GPU pending quota", "drivers proven on fakes; frozen 16-commit range"],
-  ["M3 · agent brain", "wait", "wired · live probe passed", "Baseten ok via complete_validated"],
-  ["M4 · tune + verify/explain", "wait", "logic green · GPU pending", "enforce-eager injection reproduces ~70% drop"],
-  ["M5 · report / watch / README", "wait", "in progress", "7 recorded runs re-render; partial run degrades honestly"],
+  ["M2 · bisect driver + logic", "ok", "GPU evaluated · 0 wrong verdicts ($4.63)", "frozen 16-commit range; baseline-outlier fix regression-tested"],
+  ["M3 · agent brain", "ok", "wired · live probe passed", "Baseten ok via complete_validated; tune run drove 7 live proposals"],
+  ["M4 · tune + verify/explain", "ok", "GPU evaluated · honest negative", "6 candidates, none cleared +2%; fp8 rejected on A100; baseline kept"],
+  ["M5 · report / watch / README", "ok", "11 recorded runs re-render", "verdict card + agent panel fixed; demo replay added"],
 ];
 
 function useActiveSection() {

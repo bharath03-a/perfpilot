@@ -52,7 +52,7 @@ class TuneConfig(BaseModel):
         }
     )
     quality: QualityConfig = Field(default_factory=QualityConfig)
-    max_trials: int = 8
+    max_trials: int = 6
 
 
 class AgentSettings(BaseSettings):

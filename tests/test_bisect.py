@@ -342,3 +342,26 @@ def test_persistently_noisy_endpoints_retry_once_and_terminate():
     assert any("endpoint re-measured for good" in line for line in out.pick_log)
     assert any("endpoint re-measured for bad" in line for line in out.pick_log)
     assert out.status in ("culprit", "culprit_range", "no_regression")
+
+
+def test_nan_endpoint_samples_stop_without_crash():
+    def measure(sha: str, runs: int) -> TrialOutcome:
+        return TrialOutcome(samples=[float("nan")] * runs)
+
+    out = run_bisect(COMMITS, measure)
+    assert out.status == "no_regression"
+    assert "invalid" in out.reason
+
+
+def test_nan_midpoint_samples_go_ambiguous_not_crash():
+    levels = levels_for(9)
+
+    def measure(sha: str, runs: int) -> TrialOutcome:
+        rng = random.Random(f"nanmid:{sha}")
+        samples = synth(levels[sha], 0.004, runs, rng)
+        if sha == "c08":
+            samples = [float("nan")] * runs
+        return TrialOutcome(samples=samples)
+
+    out = run_bisect(COMMITS, measure, params=BisectParams(min_runs=2, max_runs=2))
+    assert out.status in ("culprit", "culprit_range", "no_regression")

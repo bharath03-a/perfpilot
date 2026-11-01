@@ -66,7 +66,7 @@ def bisect(
     good: str | None = typer.Option(None, "--good"),
     bad: str | None = typer.Option(None, "--bad"),
 ) -> None:
-    """Bisect a commit range for the first slow commit (M2; agent in M3)."""
+    """Bisect a commit range for the first slow commit."""
     from perfpilot.git_info import commits_between
     from perfpilot.modes import BisectParams, TrialOutcome
     from perfpilot.modes.driver import drive_bisect_live
@@ -97,13 +97,35 @@ def bisect(
             return TrialOutcome(
                 skipped=True, reason=str(result.get("reason", result.get("status")))
             )
-        return TrialOutcome(samples=[r["output_throughput"] for r in result["runs"]])
+        valid = [
+            r
+            for r in result.get("runs", [])
+            if isinstance(r, dict) and not r.get("failed_requests", 0)
+        ]
+        if not valid and result.get("runs"):
+            return TrialOutcome(skipped=True, reason="all runs had failed requests")
+        return TrialOutcome(samples=[r["output_throughput"] for r in valid])
 
-    pick = extra = None
+    pick = extra = explain_fn = None
     orch = _make_orchestrator(cfg, run_id, Path("runs") / run_id)
     if orch is not None:
         pick = make_pick_fn(orch, metric=cfg.metrics.primary)
         extra = make_extra_runs_fn(orch, max_runs=cfg.stats.max_runs)
+
+        def explain_fn(sha, message, paths, stats):
+            decision = orch.explain_culprit(
+                sha,
+                message,
+                paths,
+                metric=cfg.metrics.primary,
+                good_mean=stats["good_mean"],
+                bad_mean=stats["bad_mean"],
+                effect=stats["effect"],
+            )
+            if not decision.accepted:
+                return None
+            return decision.value.model_dump()
+
     outcome = drive_bisect_live(
         commits=commits,
         measure=measure,
@@ -115,6 +137,8 @@ def bisect(
         ),
         pick=pick,
         extra_runs=extra,
+        explain_fn=explain_fn,
+        repo=cfg.bisect.repo,
     )
     typer.echo(f"status={outcome['status']} culprit={outcome['culprit']}")
     typer.echo(f"report: {outcome['run_dir']}/report.html")
@@ -144,30 +168,47 @@ def tune(
     def measure(tune_config: dict[str, Any], runs: int):
         from perfpilot.modes.tune import TuneTrial
 
-        result = worker.run_trial.remote(
-            commit=base_commit,
-            flags=tune_config,
-            runs=runs,
-            model=cfg.model,
-            workload=wl,
-            inject=None,
-        )
+        last_reason = "unknown"
+        for _ in (1, 2):  # one immediate retry on transient failure
+            result = worker.run_trial.remote(
+                commit=base_commit,
+                flags=tune_config,
+                runs=runs,
+                model=cfg.model,
+                workload=wl,
+                inject=None,
+            )
+            if result.get("status") == "ok":
+                break
+            last_reason = str(result.get("reason", result.get("status")))
         if result.get("status") != "ok":
-            raise RuntimeError(f"trial failed: {result.get('reason')}")
+            raise RuntimeError(f"trial failed twice: {last_reason}")
         runs_out = result["runs"]
-        p99 = sorted(r["p99_ttft_ms"] for r in runs_out)[-1]
+        valid = [r for r in runs_out if not r.get("failed_requests", 0)]
+        if not valid:
+            raise RuntimeError("trial failed: all runs had failed requests")
+        p99 = sorted(r["p99_ttft_ms"] for r in valid)[-1]
         return TuneTrial(
-            samples=[r["output_throughput"] for r in runs_out],
+            samples=[r["output_throughput"] for r in valid],
             p99_ttft_ms=p99,
         )
 
     def quality(tune_config: dict[str, Any]) -> float:
-        texts = worker.answer_batch.remote(
-            commit=base_commit,
-            flags=tune_config,
-            model=cfg.model,
-            prompts=[q.prompt for q in bank],
-        )
+        last_exc: Exception | None = None
+        texts = []
+        for _ in (1, 2):  # one immediate retry on transient failure
+            try:
+                texts = worker.answer_batch.remote(
+                    commit=base_commit,
+                    flags=tune_config,
+                    model=cfg.model,
+                    prompts=[q.prompt for q in bank],
+                )
+                break
+            except Exception as exc:  # noqa: BLE001 - retried once, then raised
+                last_exc = exc
+        else:
+            raise last_exc or RuntimeError("answer_batch failed twice")
         by_prompt = dict(zip([q.prompt for q in bank], texts, strict=False))
         acc, _ = accuracy(lambda p: by_prompt[p], bank)
         return acc
@@ -183,6 +224,7 @@ def tune(
         quality=quality,
         propose=propose,
         run_id=run_id,
+        model=cfg.model,
         params=TuneParams(
             min_runs=cfg.stats.min_runs,
             max_runs=cfg.stats.max_runs,
@@ -224,6 +266,62 @@ def watch(run: Path = typer.Argument(..., help="runs/<run_id>")) -> None:
     out = Path(run) / "report.html"
     out.write_text(html)
     typer.echo(f"wrote {out} (refreshes every 5s; open in a browser)")
+
+
+@app.command()
+def demo(
+    run: Path = typer.Argument(..., help="runs/<run_id>"),
+    speed: float = typer.Option(1.5, "--speed", help="seconds per event"),
+    out: Path | None = typer.Option(None, "--out", help="scratch dir"),
+) -> None:
+    """Replay a recorded run into a scratch dir, re-rendering the report
+    after each event (judge demo: narrowing-bisect movie, no GPU/key)."""
+    import json
+    import shutil
+    import time
+
+    from perfpilot.report.render import render_report
+
+    events = Path(run) / "events.jsonl"
+    if not events.exists():
+        typer.echo(f"error: no events.jsonl in {run}", err=True)
+        raise typer.Exit(code=2)
+    lines = [ln for ln in events.read_text().splitlines() if ln.strip()]
+    agent = Path(run) / "agent-events.jsonl"
+    agent_lines = (
+        [ln for ln in agent.read_text().splitlines() if ln.strip()]
+        if agent.exists()
+        else []
+    )
+    scratch = out or Path(f"{run}-demo")
+    if scratch.exists():
+        shutil.rmtree(scratch)
+    (scratch).mkdir(parents=True)
+    staged: list[str] = []
+    agent_staged: list[str] = []
+    main_ts = [json.loads(ln).get("ts", "") for ln in lines]
+    agent_ts = [json.loads(ln).get("ts", "") for ln in agent_lines]
+    ai = 0
+    for ln, ts in zip(lines, main_ts, strict=True):
+        staged.append(ln)
+        while ai < len(agent_lines) and agent_ts[ai] <= ts:
+            agent_staged.append(agent_lines[ai])
+            ai += 1
+        (scratch / "events.jsonl").write_text("\n".join(staged) + "\n")
+        (scratch / "agent-events.jsonl").write_text(
+            "\n".join(agent_staged) + ("\n" if agent_staged else "")
+        )
+        (scratch / "report.html").write_text(render_report(scratch / "events.jsonl"))
+        if speed > 0:
+            time.sleep(speed)
+    while ai < len(agent_lines):
+        agent_staged.append(agent_lines[ai])
+        ai += 1
+    (scratch / "agent-events.jsonl").write_text(
+        "\n".join(agent_staged) + ("\n" if agent_staged else "")
+    )
+    (scratch / "report.html").write_text(render_report(scratch / "events.jsonl"))
+    typer.echo(f"replayed {len(staged)} events -> {scratch}/report.html")
 
 
 @app.command()

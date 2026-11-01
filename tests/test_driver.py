@@ -157,3 +157,171 @@ def test_tune_live_completes_without_brain(tmp_path) -> None:
     assert out["best"]["max_num_seqs"] == 256
     assert "vllm serve" in out["serve_command"]
     assert (tmp_path / "no-brain-tune" / "report.html").exists()
+
+
+def test_live_bisect_emits_verdict_and_culprit_shapes(tmp_path) -> None:
+    """Timeline/verdict events carry labels; the culprit event carries the
+    driver shape the report reads."""
+    import random
+
+    from perfpilot.modes import TrialOutcome
+    from perfpilot.modes.driver import drive_bisect_live
+
+    commits = [f"v{i:02d}{'0' * 36}" for i in range(8)]
+
+    def measure(sha: str, runs: int) -> TrialOutcome:
+        rng = random.Random(hash(sha) & 0xFFFFFFFF)
+        mu = 3040.0 if commits.index(sha) >= 5 else 3800.0
+        return TrialOutcome(samples=[rng.gauss(mu, mu * 0.01) for _ in range(runs)])
+
+    out = drive_bisect_live(
+        commits, measure, run_id="shapes-bisect", runs_root=str(tmp_path)
+    )
+    assert out["status"] == "culprit"
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "shapes-bisect" / "events.jsonl")
+        .read_text()
+        .strip()
+        .splitlines()
+    ]
+    verdicts = {e["sha"]: e["label"] for e in events if e["type"] == "verdict"}
+    assert verdicts[commits[0]] == "good"
+    assert verdicts[commits[7]] == "bad"
+    culprit = next(e for e in events if e["type"] == "culprit")
+    assert culprit["culprit"] == commits[5]
+    assert isinstance(culprit["effect"], float)
+    assert "report.html" in str(tmp_path / "shapes-bisect" / "report.html")
+
+
+def test_valid_throughputs_excludes_failed_requests() -> None:
+    from perfpilot.modes.driver import _valid_throughputs
+
+    runs = [
+        {"output_throughput": 100.0, "failed_requests": 0},
+        {"output_throughput": 10.0, "failed_requests": 3},
+        {"output_throughput": 102.0},
+    ]
+    assert _valid_throughputs(runs) == [100.0, 102.0]
+    assert _valid_throughputs([]) == []
+
+
+def test_live_bisect_explains_culprit_when_brain_answers(tmp_path, monkeypatch) -> None:
+    """explain_fn output lands as an explain event; fetch/brain failures
+    skip it without failing the run."""
+    import random
+
+    import perfpilot.git_info as git_info
+    from perfpilot.modes import TrialOutcome
+    from perfpilot.modes.driver import drive_bisect_live
+
+    monkeypatch.setattr(
+        git_info,
+        "commit_diff_paths",
+        lambda repo, sha: ("slow down scheduler", ["vllm/worker.py"]),
+    )
+    commits = [f"e{i:02d}{'0' * 36}" for i in range(8)]
+    seen: list[dict] = []
+
+    def measure(sha: str, runs: int) -> TrialOutcome:
+        rng = random.Random(hash(sha) & 0xFFFFFFFF)
+        mu = 3040.0 if commits.index(sha) >= 5 else 3800.0
+        return TrialOutcome(samples=[rng.gauss(mu, mu * 0.01) for _ in range(runs)])
+
+    def explain_fn(sha, message, paths, stats):
+        seen.append({"sha": sha, "message": message, "paths": paths})
+        assert stats["bad_mean"] < stats["good_mean"]
+        return {
+            "summary": "eager fallback",
+            "mechanism": "no cuda graphs",
+            "files": ["vllm/worker.py"],
+            "confidence": "high",
+        }
+
+    out = drive_bisect_live(
+        commits,
+        measure,
+        run_id="explain-bisect",
+        runs_root=str(tmp_path),
+        explain_fn=explain_fn,
+    )
+    assert out["culprit"] == commits[5]
+    assert seen and seen[0]["paths"] == ["vllm/worker.py"]
+    events = (tmp_path / "explain-bisect" / "events.jsonl").read_text()
+    assert '"type": "explain"' in events
+    assert "vllm/worker.py" in events
+
+
+def test_live_bisect_skips_explain_on_fetch_failure(tmp_path, monkeypatch) -> None:
+    import random
+
+    import perfpilot.git_info as git_info
+    from perfpilot.modes import TrialOutcome
+    from perfpilot.modes.driver import drive_bisect_live
+
+    def _boom(repo, sha):
+        raise RuntimeError("offline")
+
+    monkeypatch.setattr(git_info, "commit_diff_paths", _boom)
+    commits = [f"f{i:02d}{'0' * 36}" for i in range(8)]
+
+    def measure(sha: str, runs: int) -> TrialOutcome:
+        rng = random.Random(hash(sha) & 0xFFFFFFFF)
+        mu = 3040.0 if commits.index(sha) >= 5 else 3800.0
+        return TrialOutcome(samples=[rng.gauss(mu, mu * 0.01) for _ in range(runs)])
+
+    out = drive_bisect_live(
+        commits,
+        measure,
+        run_id="noexplain-bisect",
+        runs_root=str(tmp_path),
+        explain_fn=lambda *a: (_ for _ in ()).throw(AssertionError("not called")),
+    )
+    assert out["status"] == "culprit"
+    events = (tmp_path / "noexplain-bisect" / "events.jsonl").read_text()
+    assert '"type": "explain"' not in events
+
+
+def test_eval_aborts_when_gpu_changes_mid_run(tmp_path) -> None:
+    """Two distinct GPU UUIDs across trials -> endpoint_error, no verdict."""
+    import random
+
+    from perfpilot.modes import TrialOutcome
+    from perfpilot.modes.driver import drive_eval_trial
+
+    calls = {"n": 0}
+
+    def make_measure(inject_for, record):
+        def measure(sha: str, runs: int) -> TrialOutcome:
+            calls["n"] += 1
+            rng = random.Random(hash(sha) & 0xFFFFFFFF)
+            mu = 3000.0 if inject_for(sha) else 3800.0
+            result = {
+                "status": "ok",
+                "gpu_uuid": f"GPU-{calls['n'] % 2}",
+                "gpu_seconds": 1.0,
+                "runs": [
+                    {"output_throughput": rng.gauss(mu, mu * 0.01)} for _ in range(5)
+                ],
+            }
+            record.append({"sha": sha, "runs": runs, "result": result})
+            return TrialOutcome(
+                samples=[r["output_throughput"] for r in result["runs"]]
+            )
+
+        return measure
+
+    commits = [f"g{i:02d}{'0' * 36}" for i in range(16)]
+    summary = drive_eval_trial(
+        commits,
+        culprit_index=9,
+        inject_kind="enforce-eager",
+        make_measure=make_measure,
+        run_id="gpu-swap",
+        runs_root=str(tmp_path),
+    )
+    assert summary["status"] == "endpoint_error"
+    assert summary["unique_gpus"] == 2
+    events = (tmp_path / "gpu-swap" / "events.jsonl").read_text()
+    assert "GPU changed mid-run" in events
+    assert '"type": "culprit"' not in events

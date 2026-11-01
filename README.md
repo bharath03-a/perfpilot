@@ -4,6 +4,11 @@ Agent that keeps a vLLM deployment of a Meta open model fast.
 **PerfBisect** finds the first slow commit; **TuneSmith** recovers speed via
 serve flags. Every claim is benchmark-verified with intervals — never vibes.
 
+Push the Frontier: an agent that gives vLLM maintainers a new capability —
+per-commit regression culprits with statistical proof. One-line usage:
+`perfpilot bisect --good G --bad B` → culprit + interval + GPU $;
+any report re-renders offline via `perfpilot report runs/<run-id>`.
+
 Indie track, Push the Frontier. Plan and spec: [PLAN.md](PLAN.md), [SPEC.md](SPEC.md).
 Interactive diagrams: [docs/](docs/index.html).
 
@@ -30,10 +35,10 @@ tune --commit C → propose flags → measure → quality gate (50Q bank)
 | M1 GPU worker trial | green | per-commit trial `ok`, ~3300–3900 tok/s, A100-40GB |
 | M2 bisect driver + logic | GPU evaluated | strong-overlay trial: wide-but-correct range (baseline outlier); mild-overlay trial: correct `no_regression` (overlay ineffective) |
 | M3 agent brain | wired, live probe passed | Baseten `ok` via `complete_validated` |
-| M4 tune + verify | logic green, GPU pending | `enforce-eager` injection reproduces ~70% drop |
+| M4 tune + verify | GPU evaluated | 6 flag candidates, none beat baseline +2% (5 no-uplift, fp8 impossible on A100 recorded as rejection); baseline kept, quality held |
 | M5 report/watch/README | in progress | 7 recorded runs re-render; this file |
 
-Suite: **157 passed, 1 skipped**, `ruff check` + `format` clean.
+Suite: **181 passed, 1 skipped**, `ruff check` + `format` clean.
 
 ## Eval (local, fake transport)
 
@@ -60,6 +65,12 @@ Sat-noon gate.
 Frozen 16-commit range, `runs/m2-eval-9` + `runs/m2-eval-10`.
 Reports re-render offline via `perfpilot report runs/<id>`.
 
+Headline invariant across both tables below: **0 wrong verdicts; every
+claim carries an interval; GPU cost is stated per run.** The local table
+(fake transport, $0) validates protocol correctness; the GPU table validates
+real A100 behavior. They are different instruments answering different
+questions — never merged into one score.
+
 | Trial | Plant | Verdict | Correct | Notes |
 |---|---|---|---|---|
 | 0 | strong overlay, idx 1 | `culprit_range` (15 wide, idx 1 inside) | by inclusion, unverified | Baseline probe returned `[3569, 3594, 1703]` — one collapsed run poisoned variance, nothing separated after (steps=0, 10 extra runs, 26 probes, $3.32) |
@@ -80,6 +91,21 @@ Two findings, both evidence-backed:
    (measured -0.8%). It should be dropped or replaced as an eval overlay —
    trial 1's `no_regression` is the *right* answer to the wrong premise.
 
+## Tune (GPU, `runs/tune-20261101-150900`, ~$1.60)
+
+Base `e5196e29`, 6 candidates max, live brain proposing, 50Q quality gate:
+prefix-caching, batch-tokens 8k/16k, async scheduling, fp8 KV, seqs-256 —
+five showed no measurable uplift (interval not fully above +2%), fp8 errored
+(A100 lacks Hopper FP8) and was recorded as a rejection while the run
+continued. Baseline kept, quality held, `status=done`. An honest negative:
+this workload on this commit is already at its flag optimum.
+
+Quality-gate meaning, stated plainly: the bank scores exact-match accuracy
+(percent scale) on greedy ≤32-token answers from Llama-3.2-1B, whose
+baseline is 2.0% — the gate is a *relative* drop check (≤2pts), not an
+absolute bar. "Quality held" means no candidate made answers worse, not
+that answers are good.
+
 ## Known limitation
 
 A culprit at the very first commit of the range is undetectable by
@@ -93,7 +119,8 @@ baseline could distinguish this case. The eval protocol therefore plants at
 ## Cost
 
 Modal A100-40GB at $2.10/h. Trials are the only spend; local logic, reports,
-and brain calls are ~$0. Spend so far (billed): $2.63.
+and brain calls are ~$0. Spend so far (metered): eval $4.63 + tune ~$1.60;
+Modal app stopped after each session, no idle bleed.
 
 ## Setup
 
@@ -107,6 +134,7 @@ printf 'BASETEN_API_KEY=%s\n' 'your-key' > .env
 uv run perfpilot bisect --good <sha> --bad <sha>
 uv run perfpilot tune --commit <sha>
 uv run perfpilot report runs/<run-id>   # watch: live refresh
+uv run perfpilot demo runs/<run-id> --speed 1.5  # replay a run, no GPU/key
 uv run perfpilot eval --trials 2        # GPU; needs quota + approval
 make test   # pytest
 make lint   # ruff check + format
@@ -129,6 +157,6 @@ Each run writes `runs/<id>/`: `config.yaml`, `events.jsonl`, `report.html`,
 
 Meta Global AI Developer Hackathon, Indie track (Push the Frontier) — all
 code in `perfpilot/` written this week on a clean layout (old scaffold
-deleted per plan). Evidence per milestone: 162-test suite, 10 recorded run
+deleted per plan). Evidence per milestone: 181-test suite, 11 recorded run
 reports under `runs/`, live GPU eval on Modal A100s, agent brain on Baseten.
 Full chronology in [PLAN.md](PLAN.md).

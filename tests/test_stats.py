@@ -84,3 +84,34 @@ def test_tune_gate_accepts_real_uplift():
 def test_needs_two_samples():
     with pytest.raises(ValueError):
         log_ratio_interval([1.0], [1.0, 2.0])
+
+
+def test_significant_improvement_is_not_a_regression():
+    faster = synth(120.0, 0.01, 8, seed=21)
+    good = synth(100.0, 0.01, 8, seed=22)
+    v = confirm_regression(faster, good)
+    assert v.label == "no_regression"
+    assert "mprovement" in v.reason
+
+
+def test_nonfinite_and_nonpositive_samples_raise():
+    good = [100.0, 101.0, 99.0]
+    for bad in (
+        [float("nan"), 1.0, 2.0],
+        [float("inf"), 1.0, 2.0],
+        [0.0, 1.0, 2.0],
+        [-5.0, 1.0, 2.0],
+    ):
+        with pytest.raises(ValueError):
+            log_ratio_interval(bad, good)
+        with pytest.raises(ValueError):
+            log_ratio_interval(good, bad)
+
+
+def test_zero_variance_is_never_decisive():
+    a = [100.0, 100.0]
+    b = [90.0, 90.0]
+    assert confirm_regression(b, a).label == "no_regression"
+    assert "zero-variance" in confirm_regression(b, a).reason
+    assert classify_commit(b, a, full_effect=-0.1).label == "inconclusive"
+    assert tune_accepts(b, a, cand_p99=100.0, best_p99=100.0).label == "inconclusive"

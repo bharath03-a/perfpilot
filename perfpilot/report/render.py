@@ -44,6 +44,7 @@ EVENT_TYPES = (
     "explain",
     "tune_candidate",
     "tune_accept",
+    "tune_result",
     "quality_check",
     "run_end",
 )
@@ -70,6 +71,29 @@ def load_events(events_path: str | Path) -> list[dict[str, Any]]:
                     stacklevel=2,
                 )
             events.append(ev)
+    return events
+
+
+def load_run_events(events_path: str | Path) -> list[dict[str, Any]]:
+    """events.jsonl merged with a sibling agent-events.jsonl (if present).
+
+    Agent calls are logged to a separate file by the CLI; the report must
+    read both. Merged stream is sorted by ``ts`` (stable, so on equal
+    timestamps main events come first).
+    """
+    events = load_events(events_path)
+    sibling = Path(events_path).parent / "agent-events.jsonl"
+    if sibling.exists():
+        for line in sibling.read_text().splitlines():
+            if line.strip():
+                ev = json.loads(line)
+                if ev.get("type") not in EVENT_TYPES:
+                    warnings.warn(
+                        f"unknown event type {ev.get('type')!r}: kept",
+                        stacklevel=2,
+                    )
+                events.append(ev)
+        events.sort(key=lambda e: str(e.get("ts", "")))
     return events
 
 
@@ -110,6 +134,37 @@ def _pct(effect: float | None) -> str:
     return f"{(math.exp(effect) - 1.0) * 100.0:+.1f}%"
 
 
+def _endpoint_effect(events: list[dict[str, Any]]) -> tuple[float | None, str]:
+    """Fallback regression for runs whose culprit event predates effect
+    logging: log-ratio of the bad endpoint mean over the good endpoint
+    mean, using the first two distinct trial_result SHAs as the
+    endpoints (bisect always measures endpoints first)."""
+    seen: list[str] = []
+    samples: dict[str, list[float]] = {}
+    for e in events:
+        if e.get("type") != "trial_result":
+            continue
+        sha = str(e.get("sha") or e.get("commit") or "")
+        if not sha:
+            continue
+        m, _, _ = _throughput(e)
+        if sha not in samples:
+            samples[sha] = []
+            seen.append(sha)
+        if m:
+            samples[sha].append(m)
+    if len(seen) < 2:
+        return None, ""
+    good, bad = samples[seen[0]], samples[seen[1]]
+    if not good or not bad:
+        return None, ""
+    mg = math.fsum(good) / len(good)
+    mb = math.fsum(bad) / len(bad)
+    if mg <= 0 or mb <= 0:
+        return None, ""
+    return math.log(mb / mg), " (derived from endpoint trials)"
+
+
 def _verdict_card(events: list[dict[str, Any]]) -> str:
     culprit = next((e for e in reversed(events) if e.get("type") == "culprit"), {})
     verify = next((e for e in reversed(events) if e.get("type") == "verify"), {})
@@ -122,17 +177,42 @@ def _verdict_card(events: list[dict[str, Any]]) -> str:
     )
     gpu_min = gpu_s / 60.0
     cost = gpu_min / 60.0 * rate
-    sha = culprit.get("sha") or culprit.get("commit") or "n/a"
+    sha = culprit.get("sha") or culprit.get("culprit") or culprit.get("commit")
+    culprit_range = culprit.get("culprit_range") or []
+    if sha:
+        culprit_txt = f"<code>{_esc(sha)}</code>"
+    elif culprit_range:
+        culprit_txt = (
+            f"range of {len(culprit_range)} "
+            f"(<code>{_esc(culprit_range[0][:12])}</code>…"
+            f"<code>{_esc(culprit_range[-1][:12])}</code>)"
+        )
+    else:
+        culprit_txt = "n/a"
     effect = culprit.get("effect")
     lo = culprit.get("lo", effect)
     hi = culprit.get("hi", effect)
-    verified = verify.get("verified", verify.get("passed"))
-    vtxt = "verified" if verified else ("unverified" if verify else "no verify step")
+    note = ""
+    if effect is None:
+        effect, note = _endpoint_effect(events)
+        lo = hi = effect
+    verified = verify.get("verified", verify.get("passed", culprit.get("verified")))
+    if verified:
+        vtxt = "verified"
+    elif verify or "verified" in culprit:
+        vtxt = "unverified"
+    else:
+        vtxt = "no verify step"
     return (
         "<section><h2>Verdict</h2><div class='card'>"
-        f"<p>Culprit: <code>{_esc(sha)}</code></p>"
-        f"<p>Regression: <b>{_esc(_pct(effect))}</b> "
-        f"(interval [{_esc(_pct(lo))}, {_esc(_pct(hi))}])</p>"
+        f"<p>Culprit: {culprit_txt}</p>"
+        f"<p>Regression: <b>{_esc(_pct(effect))}</b>"
+        + (
+            f" (interval [{_esc(_pct(lo))}, {_esc(_pct(hi))}]){_esc(note)}"
+            if effect is not None
+            else " (not logged for this run)"
+        )
+        + "</p>"
         f"<p>Status: <b>{_esc(vtxt)}</b></p>"
         f"<p>GPU: {gpu_min:.1f} min (${cost:.2f} @ ${rate:.2f}/h)</p>"
         "</div></section>"
@@ -265,10 +345,7 @@ def _agent_panel(events: list[dict[str, Any]]) -> str:
 def _explanation(events: list[dict[str, Any]]) -> str:
     explains = [e for e in events if e.get("type") == "explain"]
     if not explains:
-        return (
-            "<section><h2>Explanation</h2>"
-            "<p>No explanation (skipped in eval).</p></section>"
-        )
+        return "<section><h2>Explanation</h2><p>No explanation recorded.</p></section>"
     start = next((e for e in events if e.get("type") == "run_start"), {})
     repo = str(start.get("repo", "vllm-project/vllm"))
     sha = str(explains[-1].get("sha", ""))
@@ -292,7 +369,8 @@ def _tune(events: list[dict[str, Any]]) -> str:
     cands = [e for e in events if e.get("type") == "tune_candidate"]
     accepts = [e for e in events if e.get("type") == "tune_accept"]
     quals = [e for e in events if e.get("type") == "quality_check"]
-    if not cands and not accepts:
+    result = next((e for e in reversed(events) if e.get("type") == "tune_result"), {})
+    if not cands and not accepts and not result:
         return "<section><h2>TuneSmith</h2><p>No tuning candidates tried.</p></section>"
 
     def _cand_cfg(c: dict[str, Any]) -> str:
@@ -327,23 +405,34 @@ def _tune(events: list[dict[str, Any]]) -> str:
             winner = a
             break
     start = next((e for e in events if e.get("type") == "run_start"), {})
-    model = str(start.get("model", "<model>"))
-    wcfg = winner.get("config", {}) if winner else {}
-    cmd = serve_command(
-        model,
-        wcfg or {},
-        port=int(start.get("port", 8000) or 8000),
-        seed=int(start.get("seed", 0) or 0),
-    )
+    model = str(result.get("model") or start.get("model") or "")
+    confirmed = bool(result.get("confirmed", bool(winner)))
+    best_cfg = result.get("best") or {}
+    wcfg = winner.get("config", {}) if winner else best_cfg
     uplift = f" (uplift {_esc(_interval(winner))})" if winner else ""
+    if confirmed and wcfg and model:
+        cmd_txt = f"<p>Run it: <code>{_esc(serve_command(model, wcfg))}</code></p>"
+    elif confirmed and wcfg:
+        cmd_txt = (
+            f"<p>Winner: <code>{_esc(json.dumps(wcfg, default=str))}</code>{uplift}</p>"
+        )
+    else:
+        cmd_txt = (
+            "<p>Baseline kept: no candidate cleared the uplift bar, "
+            "so the baseline stays.</p>"
+        )
 
     def _qual(q: dict[str, Any]) -> str:
         drop = q.get("accuracy_drop_pts", q.get("accuracy_drop", q.get("drop_pts", "")))
+
+        def _pctv(v: Any) -> str:
+            return f"{v}%" if isinstance(v, (int, float)) else _esc(v)
+
         parts = [
             "pass" if q.get("passed", True) else "FAIL",
-            f"accuracy {_esc(q.get('accuracy', ''))}",
-            f"baseline {_esc(q.get('baseline_accuracy', ''))}",
-            f"drop {_esc(drop)}",
+            f"accuracy {_pctv(q.get('accuracy', ''))}",
+            f"baseline {_pctv(q.get('baseline_accuracy', ''))}",
+            f"drop {_pctv(drop)} pts",
         ]
         if q.get("reason"):
             parts.append(_esc(q["reason"]))
@@ -354,13 +443,18 @@ def _tune(events: list[dict[str, Any]]) -> str:
         )
 
     quals_txt = "".join(_qual(q) for q in quals)
+    if wcfg:
+        outcome_txt = (
+            f"<p>Winner: <code>{_esc(json.dumps(wcfg, default=str))}</code>{uplift}</p>"
+        )
+    else:
+        outcome_txt = ""
     return (
         "<section><h2>TuneSmith</h2><table>"
         "<tr><th>Candidate</th><th>Outcome</th><th>Effect + interval</th>"
         "<th>Why tried</th></tr>"
         f"{rows}</table>"
-        f"<p>Winner: <code>{_esc(json.dumps(wcfg, default=str))}</code>{uplift}</p>"
-        f"<p>Run it: <code>{_esc(cmd)}</code></p>"
+        f"{outcome_txt}{cmd_txt}"
         + (f"<h3>Quality guard</h3><ul>{quals_txt}</ul>" if quals_txt else "")
         + "</section>"
     )
@@ -420,7 +514,7 @@ def render_report(events_path: str | Path, live: bool = False) -> str:
     Returns:
         Complete HTML document as a string.
     """
-    events = load_events(events_path)
+    events = load_run_events(events_path)
     run_id = next(
         (str(e.get("run_id", "")) for e in events if e.get("run_id")),
         Path(events_path).parent.name,

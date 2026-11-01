@@ -61,6 +61,9 @@ def log_ratio_interval(
     ref = list(ref)
     if len(cand) < 2 or len(ref) < 2:
         raise ValueError("need >=2 samples per side")
+    for x in cand + ref:
+        if not isinstance(x, (int, float)) or not math.isfinite(x) or x <= 0:
+            raise ValueError(f"samples must be finite positive numbers, got {x!r}")
     mc, mg = _mean(cand), _mean(ref)
     if mc <= 0 or mg <= 0:
         raise ValueError("means must be positive for a log ratio")
@@ -91,8 +94,18 @@ def log_ratio_interval(
 def confirm_regression(
     bad: Sequence[float], good: Sequence[float], confidence: float = 0.90
 ) -> Verdict:
-    """Endpoint check: R = ln(bad / good). Significant + >=3% or no-go."""
+    """Endpoint check: R = ln(bad / good). Throughput is higher-is-better,
+    so a confirmed regression needs a significant effect <= -3%."""
     iv = log_ratio_interval(bad, good, confidence)
+    if iv.lo == iv.hi:
+        return Verdict(
+            label="no_regression",
+            effect=iv.effect,
+            lo=iv.lo,
+            hi=iv.hi,
+            confidence=confidence,
+            reason="degenerate zero-variance samples: no confirmed regression",
+        )
     if iv.lo <= 0.0 <= iv.hi:
         return Verdict(
             label="no_regression",
@@ -101,6 +114,15 @@ def confirm_regression(
             hi=iv.hi,
             confidence=confidence,
             reason="interval covers 0: no confirmed regression",
+        )
+    if iv.effect > 0.0:
+        return Verdict(
+            label="no_regression",
+            effect=iv.effect,
+            lo=iv.lo,
+            hi=iv.hi,
+            confidence=confidence,
+            reason="endpoints differ: improvement, not a regression",
         )
     if abs(iv.effect) < NO_REGRESSION_THRESHOLD:
         return Verdict(
@@ -129,6 +151,15 @@ def classify_commit(
 ) -> Verdict:
     """Bisect midpoint rule with m = R / 2; else inconclusive."""
     iv = log_ratio_interval(commit, good, confidence)
+    if iv.lo == iv.hi:
+        return Verdict(
+            label="inconclusive",
+            effect=iv.effect,
+            lo=iv.lo,
+            hi=iv.hi,
+            confidence=confidence,
+            reason="degenerate zero-variance samples: needs more runs",
+        )
     m = full_effect / 2.0
     if full_effect < 0:
         if iv.hi < m:
@@ -188,6 +219,15 @@ def tune_accepts(
 ) -> Verdict:
     """TuneSmith gate: interval fully above +2% and p99 TTFT <=10% worse."""
     iv = log_ratio_interval(candidate, best, confidence)
+    if iv.lo == iv.hi:
+        return Verdict(
+            label="inconclusive",
+            effect=iv.effect,
+            lo=iv.lo,
+            hi=iv.hi,
+            confidence=confidence,
+            reason="degenerate zero-variance samples: reject",
+        )
     if iv.lo <= min_uplift:
         return Verdict(
             label="inconclusive",

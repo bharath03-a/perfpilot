@@ -77,6 +77,20 @@ def commits_between(repo: str, good: str, bad: str) -> list[str]:
     return [c["sha"] for c in data.get("commits", []) if len(c.get("sha", "")) == 40]
 
 
+def commit_diff_paths(repo: str, sha: str) -> tuple[str, list[str]]:
+    """First message line + changed paths for one commit.
+
+    Raises RuntimeError when the commit is unreachable; callers that only
+    want an explanation treat that as "no explanation".
+    """
+    data = _api(f"https://api.github.com/repos/{repo}/commits/{sha}")
+    if not isinstance(data, dict) or not data.get("sha"):
+        raise RuntimeError(f"commit {sha[:12]} not found in {repo}")
+    msg = (data.get("commit", {}).get("message", "") or "").splitlines()
+    files = data.get("files", []) or []
+    return (msg[0] if msg else ""), [str(f.get("filename", "")) for f in files]
+
+
 def oldest_first_range(repo: str, n: int, skip_newest: int = 8) -> list[str]:
     """16-commit-style range, oldest first, skipping the newest commits.
 
