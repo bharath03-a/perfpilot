@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
+import re
+
 from typer.testing import CliRunner
 
 from perfpilot.cli import app
 
 runner = CliRunner()
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _clean(output: str) -> str:
+    """Strip ANSI escapes: rich may split '--trials' across styled spans."""
+    return _ANSI_RE.sub("", output)
+
 
 def test_help_lists_commands() -> None:
     res = runner.invoke(app, ["--help"])
     assert res.exit_code == 0
     for cmd in ("bisect", "tune", "report", "watch", "eval"):
-        assert cmd in res.output
+        assert cmd in _clean(res.output)
 
 
 def test_bisect_needs_good_bad(tmp_path) -> None:
@@ -32,4 +41,4 @@ def test_report_missing_run(tmp_path) -> None:
 def test_eval_defaults_trials() -> None:
     res = runner.invoke(app, ["eval", "--help"])
     assert res.exit_code == 0
-    assert "--trials" in res.output
+    assert "--trials" in _clean(res.output)
