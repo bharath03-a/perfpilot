@@ -285,6 +285,71 @@ def test_live_bisect_skips_explain_on_fetch_failure(tmp_path, monkeypatch) -> No
     assert '"type": "explain"' not in events
 
 
+def test_live_bisect_writes_fix_patch_on_verified_culprit(
+    tmp_path, monkeypatch
+) -> None:
+    """draft_fn output lands as a fix event plus fix.patch; only verified
+    culprits get one."""
+    import random
+
+    import perfpilot.git_info as git_info
+    from perfpilot.modes import TrialOutcome
+    from perfpilot.modes.driver import drive_bisect_live
+
+    monkeypatch.setattr(
+        git_info, "commit_patch", lambda repo, sha, cap=6000: "diff --git culprit"
+    )
+    commits = [f"d{i:02d}{'0' * 36}" for i in range(8)]
+
+    def measure(sha: str, runs: int) -> TrialOutcome:
+        rng = random.Random(hash(sha) & 0xFFFFFFFF)
+        mu = 3040.0 if commits.index(sha) >= 5 else 3800.0
+        return TrialOutcome(samples=[rng.gauss(mu, mu * 0.01) for _ in range(runs)])
+
+    out = drive_bisect_live(
+        commits,
+        measure,
+        run_id="fix-bisect",
+        runs_root=str(tmp_path),
+        draft_fn=lambda sha, patch: {"patch": "revert it"} if patch else None,
+    )
+    assert out["status"] == "culprit"
+    assert out["verified"] is True
+    events = (tmp_path / "fix-bisect" / "events.jsonl").read_text()
+    assert '"type": "fix"' in events
+    assert (tmp_path / "fix-bisect" / "fix.patch").read_text() == "revert it"
+
+
+def test_live_bisect_skips_fix_when_brain_declines(tmp_path, monkeypatch) -> None:
+    import random
+
+    import perfpilot.git_info as git_info
+    from perfpilot.modes import TrialOutcome
+    from perfpilot.modes.driver import drive_bisect_live
+
+    monkeypatch.setattr(
+        git_info, "commit_patch", lambda repo, sha, cap=6000: "diff --git culprit"
+    )
+    commits = [f"g{i:02d}{'0' * 36}" for i in range(8)]
+
+    def measure(sha: str, runs: int) -> TrialOutcome:
+        rng = random.Random(hash(sha) & 0xFFFFFFFF)
+        mu = 3040.0 if commits.index(sha) >= 5 else 3800.0
+        return TrialOutcome(samples=[rng.gauss(mu, mu * 0.01) for _ in range(runs)])
+
+    out = drive_bisect_live(
+        commits,
+        measure,
+        run_id="nofix-bisect",
+        runs_root=str(tmp_path),
+        draft_fn=lambda sha, patch: None,
+    )
+    assert out["status"] == "culprit"
+    events = (tmp_path / "nofix-bisect" / "events.jsonl").read_text()
+    assert '"type": "fix"' not in events
+    assert not (tmp_path / "nofix-bisect" / "fix.patch").exists()
+
+
 def test_eval_rejects_unknown_inject_kind_before_any_trial(tmp_path) -> None:
     """The eval/CLI vocabulary bug class: an invalid kind must fail loud
     before spending GPU, not inside the first trial."""

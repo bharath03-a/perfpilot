@@ -42,6 +42,7 @@ EVENT_TYPES = (
     "culprit",
     "verify",
     "explain",
+    "fix",
     "tune_candidate",
     "tune_accept",
     "tune_result",
@@ -224,7 +225,13 @@ def _verdict_card(events: list[dict[str, Any]]) -> str:
     cost = gpu_min / 60.0 * rate
     sha = culprit.get("sha") or culprit.get("culprit") or culprit.get("commit")
     culprit_range = culprit.get("culprit_range") or []
-    if sha:
+    if len(culprit_range) > 1:
+        culprit_txt = (
+            f"range of {len(culprit_range)} "
+            f"(<code>{_esc(culprit_range[0][:12])}</code>…"
+            f"<code>{_esc(culprit_range[-1][:12])}</code>)"
+        )
+    elif sha:
         culprit_txt = f"<code>{_esc(sha)}</code>"
     elif culprit_range:
         culprit_txt = (
@@ -537,6 +544,20 @@ def _explanation(events: list[dict[str, Any]]) -> str:
     return f"<section><h2>Explanation</h2>{blocks}</section>"
 
 
+def _fix(events: list[dict[str, Any]]) -> str:
+    fix = next((e for e in reversed(events) if e.get("type") == "fix"), None)
+    if fix is None:
+        return ""
+    return (
+        "<section><h2>Draft fix</h2>"
+        f"<p class='v-cap'>Proposed revert for <code>{_esc(fix.get('sha', ''))}</code> "
+        f"({int(fix.get('patch_len', 0))} chars, full text in <code>fix.patch</code>). "
+        "Untested draft — review before applying.</p>"
+        f"<pre>{_esc(fix.get('patch_excerpt', ''))}</pre>"
+        "</section>"
+    )
+
+
 def _tune(events: list[dict[str, Any]]) -> str:
     cands = [e for e in events if e.get("type") == "tune_candidate"]
     accepts = [e for e in events if e.get("type") == "tune_accept"]
@@ -731,6 +752,8 @@ CSS = (
     "canvas#tput{max-height:300px}"
     "ul.quals{margin:.5rem 0;padding-left:1.2rem;font-size:.88rem}"
     "ul.quals li{margin:.2rem 0}"
+    "pre{background:var(--ink);color:var(--bench);border-radius:8px;"
+    "padding:1rem;overflow-x:auto;font-size:.78rem;line-height:1.5}"
     ".costrow{display:grid;grid-template-columns:7rem 1fr 11rem;gap:.7rem;"
     "align-items:center;margin:.3rem 0;font-size:.82rem}"
     ".costsha{font-family:'IBM Plex Mono',monospace}"
@@ -777,6 +800,7 @@ def render_report(events_path: str | Path, live: bool = False) -> str:
     has_tune = bool(types & {"tune_candidate", "tune_accept", "tune_result"})
     has_agent = bool(types & {"agent_call"})
     has_explain = bool(types & {"explain"})
+    has_fix = bool(types & {"fix"})
     body = ""
     if has_bisect:
         body += _verdict_card(events) + _timeline(events) + _chart(events)
@@ -784,6 +808,8 @@ def render_report(events_path: str | Path, live: bool = False) -> str:
         body += _agent_panel(events)
     if has_explain:
         body += _explanation(events)
+    if has_fix:
+        body += _fix(events)
     if has_tune:
         body += _tune(events)
     body += _cost(events)

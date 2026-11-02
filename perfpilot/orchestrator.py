@@ -50,6 +50,7 @@ EVENT_TYPES = (
     "culprit",
     "verify",
     "explain",
+    "fix",
     "tune_candidate",
     "tune_accept",
     "quality_check",
@@ -138,14 +139,38 @@ class EventLog:
         return event
 
 
+LEARNINGS_CAP = 12
+LEARNING_LEN = 160
+
+
 class AgentOrchestrator:
-    """Validates agent proposals for modes/ (bisect.py, tune.py)."""
+    """Validates agent proposals for modes/ (bisect.py, tune.py).
+
+    Every accepted or rejected decision appends one short learning; the
+    most recent ones travel with each new prompt so the brain sees what
+    already happened this run instead of deciding one-shot every time.
+    """
 
     def __init__(
         self, run_id: str, events_path: str | Path, client: SparkClient | None = None
     ) -> None:
         self.events = EventLog(run_id, events_path)
         self.client = client or SparkClient()
+        self.learnings: list[str] = []
+
+    def _remember(self, text: str) -> None:
+        """One compact learning; oldest drop off past the cap."""
+        text = " ".join(text.split())
+        if len(text) > LEARNING_LEN:
+            text = text[:LEARNING_LEN] + "…"
+        self.learnings.append(text)
+        del self.learnings[:-LEARNINGS_CAP]
+
+    def _context(self) -> str:
+        if not self.learnings:
+            return ""
+        lines = "\n".join(f"- {item}" for item in self.learnings)
+        return f"\n\nEarlier this run:\n{lines}"
 
     def _ask[
         T: ExplainCulprit
@@ -157,10 +182,11 @@ class AgentOrchestrator:
     ](
         self, decision: DecisionType, user: str, model_cls: type[T]
     ) -> tuple[T | None, str]:
+        prompt = user + self._context()
         try:
             proposal = complete_validated(
                 system=SYSTEM_PROMPTS[decision],
-                user=user,
+                user=prompt,
                 response_model=model_cls,
                 transport=self.client.transport,
                 api_key=self.client._api_key,
@@ -234,8 +260,10 @@ class AgentOrchestrator:
         if proposal.sha not in cands:
             why = f"sha {proposal.sha} outside range; using middle {fallback}"
             self._log("pick_commit", proposal.model_dump(), False, why, fallback)
+            self._remember(f"rejected pick {proposal.sha}: outside range")
             return Decision(fallback, False, why)
         self._log("pick_commit", proposal.model_dump(), True, proposal.reason)
+        self._remember(f"picked {proposal.sha}: {proposal.reason}")
         return Decision(proposal.sha, True, proposal.reason)
 
     def extra_runs(
@@ -271,8 +299,10 @@ class AgentOrchestrator:
         if runs != proposal.runs:
             why = f"clamped {proposal.runs} to budget {budget}"
             self._log("extra_runs", proposal.model_dump(), False, why, runs)
+            self._remember(f"clamped extra runs {proposal.runs} to budget {budget}")
             return Decision(runs, False, why)
         self._log("extra_runs", proposal.model_dump(), True, proposal.reason)
+        self._remember(f"granted {runs} extra runs: {proposal.reason}")
         return Decision(runs, True, proposal.reason)
 
     def explain_culprit(
@@ -312,6 +342,7 @@ class AgentOrchestrator:
             )
             return Decision(fallback, False, why)
         self._log("explain_culprit", proposal.model_dump(), True, note)
+        self._remember(f"explained {sha}: {proposal.summary}")
         return Decision(proposal, True, note)
 
     def rank_knobs(
@@ -336,6 +367,7 @@ class AgentOrchestrator:
             self._log("rank_knobs", proposal.model_dump(), False, why, fallback)
             return Decision(fallback, False, why)
         self._log("rank_knobs", proposal.model_dump(), True, proposal.reason)
+        self._remember(f"knob order: {proposal.order}")
         return Decision(proposal.order, True, proposal.reason)
 
     @staticmethod
@@ -442,6 +474,7 @@ class AgentOrchestrator:
             )
             return Decision(fallback, False, why)
         self._log("propose_config", proposal.model_dump(), True, proposal.reason)
+        self._remember(f"tried {proposal.knob}={proposal.value!r}: {proposal.reason}")
         return Decision(proposal, True, proposal.reason)
 
     def draft_fix(self, sha: str, diff: str = "") -> Decision[DraftFix | None]:

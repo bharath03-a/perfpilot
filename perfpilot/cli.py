@@ -106,11 +106,17 @@ def bisect(
             return TrialOutcome(skipped=True, reason="all runs had failed requests")
         return TrialOutcome(samples=[r["output_throughput"] for r in valid])
 
-    pick = extra = explain_fn = None
+    pick = extra = explain_fn = draft_fn = None
     orch = _make_orchestrator(cfg, run_id, Path("runs") / run_id)
     if orch is not None:
         pick = make_pick_fn(orch, metric=cfg.metrics.primary)
         extra = make_extra_runs_fn(orch, max_runs=cfg.stats.max_runs)
+
+        def draft_fn(sha, patch):
+            decision = orch.draft_fix(sha, patch)
+            if not decision.accepted or decision.value is None:
+                return None
+            return {"patch": decision.value.patch}
 
         def explain_fn(sha, message, paths, stats):
             decision = orch.explain_culprit(
@@ -138,6 +144,7 @@ def bisect(
         pick=pick,
         extra_runs=extra,
         explain_fn=explain_fn,
+        draft_fn=draft_fn,
         repo=cfg.bisect.repo,
     )
     typer.echo(f"status={outcome['status']} culprit={outcome['culprit']}")

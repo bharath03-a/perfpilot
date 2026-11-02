@@ -235,13 +235,15 @@ def drive_bisect_live(
     runs_root: str = "runs",
     gpu_cost_per_hour: float = 2.10,
     explain_fn=None,
+    draft_fn=None,
     repo: str = "vllm-project/vllm",
 ) -> dict[str, Any]:
     """Real (non-eval) bisect: no injection, no hidden culprit.
 
     ``explain_fn`` maps (sha, message, diff_paths, stats) to a
-    {summary, mechanism, files, confidence} mapping or None; any failure
-    (fetch or brain) skips the explanation without failing the run.
+    {summary, mechanism, files, confidence} mapping or None; ``draft_fn``
+    maps (sha, patch) to a {patch} mapping or None. Any failure (fetch
+    or brain) skips that step without failing the run.
     """
     from perfpilot.modes import run_bisect as _run_bisect
 
@@ -292,6 +294,8 @@ def drive_bisect_live(
     _emit_culprit(log, outcome)
     if outcome.culprit and explain_fn is not None:
         _maybe_explain(log, commits, outcome, samples_by_sha, explain_fn, repo)
+    if outcome.verified and outcome.culprit and draft_fn is not None:
+        _maybe_draft(log, run_dir, outcome.culprit, draft_fn, repo)
     log.emit("run_end", status=outcome.status)
     html = render_mod.render_report(events_path)
     run_dir_mod.finalize_report(run_dir, html)
@@ -345,6 +349,32 @@ def _maybe_explain(
         mechanism=rec.get("mechanism", ""),
         files=list(rec.get("files", []) or []),
         confidence=rec.get("confidence", ""),
+    )
+
+
+def _maybe_draft(log: EventLog, run_dir, sha: str, draft_fn, repo: str) -> None:
+    """Fetch the culprit patch and ask the brain for a revert; failures
+    skip the fix without failing the run."""
+    from perfpilot.git_info import commit_patch
+    from perfpilot.report import run_dir as run_dir_mod
+
+    try:
+        patch = commit_patch(repo, sha)
+        if not patch.strip():
+            return
+        rec = draft_fn(sha, patch)
+    except Exception:
+        return
+    if not rec or not str(rec.get("patch", "")).strip():
+        return
+    text = str(rec["patch"])
+    run_dir_mod.write_fix_patch(run_dir, text)
+    excerpt = text[:500] + ("…truncated" if len(text) > 500 else "")
+    log.emit(
+        "fix",
+        sha=sha,
+        patch_len=len(text),
+        patch_excerpt=excerpt,
     )
 
 

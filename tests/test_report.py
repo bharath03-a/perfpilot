@@ -183,6 +183,14 @@ def _synthetic_events(run_id: str = "eval0") -> list[dict]:
             "serve_command": "vllm serve glimmer --max-num-seqs 256",
             "model": "glimmer",
         },
+        {
+            "ts": "t15c",
+            "run_id": run_id,
+            "type": "fix",
+            "sha": "mmm",
+            "patch_len": 42,
+            "patch_excerpt": "diff --git a/x b/x",
+        },
         {"ts": "t16", "run_id": run_id, "type": "run_end", "status": "done"},
     ]
 
@@ -422,6 +430,27 @@ def test_verdict_card_reads_driver_culprit_shape(tmp_path: Path):
     assert "derived from endpoint trials" in html_doc
 
 
+def test_verdict_card_shows_range_for_range_outcomes(tmp_path: Path):
+    """A culprit_range outcome must not masquerade as a single culprit."""
+    events = [
+        {"ts": "t0", "run_id": "r", "type": "run_start", "gpu_cost_per_hour": 2.10},
+        {
+            "ts": "t1",
+            "run_id": "r",
+            "type": "culprit",
+            "sha": "cccc",
+            "culprit": "cccc",
+            "culprit_range": ["aaaa", "bbbb", "cccc"],
+            "verified": False,
+            "steps": 2,
+        },
+        {"ts": "t2", "run_id": "r", "type": "run_end", "status": "culprit_range"},
+    ]
+    html_doc = render_report(_write_events(tmp_path, events))
+    assert "range of 3" in html_doc
+    assert "Culprit: <code>cccc" not in html_doc
+
+
 def test_report_merges_sibling_agent_events(tmp_path: Path):
     """agent-events.jsonl beside events.jsonl feeds the agent panel."""
     events = [
@@ -511,6 +540,25 @@ def test_throughput_chart_colors_points_and_shows_band(tmp_path: Path):
     assert "#B3261E" in html_doc  # bad verdict color present
     assert "GPU spend" in html_doc
     assert "$0.11" in html_doc  # 180s @ $2.10/h
+
+
+def test_fix_section_shows_excerpt_with_review_warning(tmp_path: Path):
+    events = [
+        {"ts": "t0", "run_id": "r", "type": "run_start", "gpu_cost_per_hour": 2.10},
+        {
+            "ts": "t1",
+            "run_id": "r",
+            "type": "fix",
+            "sha": "deadbeef",
+            "patch_len": 42,
+            "patch_excerpt": "diff --git a/x b/x",
+        },
+        {"ts": "t2", "run_id": "r", "type": "run_end", "status": "culprit"},
+    ]
+    html_doc = render_report(_write_events(tmp_path, events))
+    assert "Draft fix" in html_doc
+    assert "diff --git a/x b/x" in html_doc
+    assert "review before applying" in html_doc
 
 
 def test_tune_no_winner_renders_baseline_kept(tmp_path: Path):

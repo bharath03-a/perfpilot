@@ -431,3 +431,36 @@ def test_real_env_beats_dotenv(monkeypatch, tmp_path):
         f"{API_KEY_ENV}=dotenv-key\nBASETEN_API_KEY=dotenv-fallback\n"
     )
     assert read_api_key() == "real-env-key"
+
+
+def test_learnings_travel_into_later_prompts(tmp_path: Path):
+    """Decisions stop being one-shot: the second prompt carries the first
+    decision's outcome."""
+    seen: list[str] = []
+
+    def transport(sys: str, user: str) -> str:
+        seen.append(user)
+        if "Current runs" in user:
+            return json.dumps({"runs": 2, "reason": "tighten it"})
+        return json.dumps({"sha": "b", "reason": "middle looks slow"})
+
+    o = orch(tmp_path, transport)
+    d = o.pick_commit(["a", "b", "c"])
+    assert d.value == "b" and d.accepted is True
+    assert o.learnings and "picked b" in o.learnings[0]
+    o.extra_runs(2, 8)
+    assert "Earlier this run:" in seen[-1]
+    assert "picked b" in seen[-1]
+
+
+def test_learnings_capped_and_compact(tmp_path: Path):
+    o = orch(tmp_path, lambda sys, user: "{}")
+    for i in range(20):
+        o._remember(f"learning number {i} " + "x" * 500)
+    assert len(o.learnings) == 12
+    assert all(len(item) <= 161 for item in o.learnings)
+    assert o.learnings[-1].startswith("learning number 19")
+    assert "Earlier this run:" in o._context()
+    assert o._context().count("\n- ") == 12
+    o2 = orch(tmp_path, lambda sys, user: "{}")
+    assert o2._context() == ""

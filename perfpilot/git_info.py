@@ -91,6 +91,25 @@ def commit_diff_paths(repo: str, sha: str) -> tuple[str, list[str]]:
     return (msg[0] if msg else ""), [str(f.get("filename", "")) for f in files]
 
 
+def commit_patch(repo: str, sha: str, cap: int = 6000) -> str:
+    """Combined per-file patches for one commit, capped.
+
+    Raises RuntimeError when the commit is unreachable; callers that only
+    want a draft treat that as "no fix".
+    """
+    data = _api(f"https://api.github.com/repos/{repo}/commits/{sha}")
+    if not isinstance(data, dict) or not data.get("sha"):
+        raise RuntimeError(f"commit {sha[:12]} not found in {repo}")
+    parts = []
+    for f in data.get("files", []) or []:
+        patch = f.get("patch", "")
+        if patch:
+            parts.append(f"--- {f.get('filename', '')}\n{patch}")
+        if sum(len(p) for p in parts) >= cap:
+            break
+    return "\n".join(parts)[:cap]
+
+
 def oldest_first_range(repo: str, n: int, skip_newest: int = 8) -> list[str]:
     """16-commit-style range, oldest first, skipping the newest commits.
 
