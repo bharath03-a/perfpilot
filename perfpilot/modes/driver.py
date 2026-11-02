@@ -111,6 +111,13 @@ def drive_eval_trial(
     gpu_cost_per_hour: float = 2.10,
 ) -> dict[str, Any]:
     """One planted-culprit trial. Returns the summary; culprit stays hidden."""
+    from perfpilot.evals.inject import WORKER_INJECTS
+
+    if inject_kind not in WORKER_INJECTS:
+        raise ValueError(
+            f"unknown injection kind {inject_kind!r}: "
+            f"expected one of {sorted(WORKER_INJECTS)}"
+        )
     run_dir = run_dir_mod.write_run_skeleton(
         run_id, {"commits": commits}, runs_root=runs_root
     )

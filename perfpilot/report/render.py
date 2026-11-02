@@ -375,33 +375,98 @@ def _timeline(events: list[dict[str, Any]]) -> str:
     )
 
 
+def _verdict_color(label: str) -> str:
+    """Point color for a trial by its verdict label."""
+    low = label.lower()
+    if low == "good":
+        return "#1a7f37"
+    if low == "bad":
+        return "#B3261E"
+    if low in ("skip", "skipped"):
+        return "#0F766E"
+    if low in ("ambiguous", "inconclusive"):
+        return "#B26A00"
+    return "#72726E"
+
+
 def _chart(events: list[dict[str, Any]]) -> str:
-    labels, means, los, his = [], [], [], []
+    labels, means, los, his, colors = [], [], [], [], []
+    verdict_of: dict[str, str] = {}
+    for e in events:
+        if e.get("type") == "verdict" and e.get("sha"):
+            verdict_of[str(e["sha"])] = str(e.get("label", ""))
     for e in events:
         if e.get("type") != "trial_result":
             continue
+        sha = str(e.get("sha") or e.get("commit") or "?")
         m, lo, hi = _throughput(e)
-        labels.append(str(e.get("sha") or e.get("commit") or "?")[:8])
+        labels.append(sha[:8])
         means.append(m)
         los.append(lo if lo is not None else m)
         his.append(hi if hi is not None else m)
+        label = verdict_of.get(sha, "")
+        if not label:
+            status = str(e.get("status", ""))
+            label = {"ok": "good", "skip": "skip", "error": "bad"}.get(status, "")
+        colors.append(_verdict_color(label))
     if not labels:
         return "<section><h2>Throughput</h2><p>No trial results yet.</p></section>"
     return (
         "<section><h2>Throughput (tok/s) with intervals</h2>"
-        "<canvas id='tput' height='120'></canvas>"
+        "<p class='v-cap'>Point color = verdict. The band is the trial range.</p>"
+        "<canvas id='tput' height='140'></canvas>"
         "<script>"
         f"const labels={json.dumps(labels)};"
         f"const means={json.dumps(means)};"
         f"const los={json.dumps(los)};"
         f"const his={json.dumps(his)};"
+        f"const ptcolors={json.dumps(colors)};"
         "new Chart(document.getElementById('tput'),{type:'line',"
         "data:{labels:labels,datasets:["
-        "{label:'mean',data:means,borderColor:'#4a9',fill:false},"
-        "{label:'lo',data:los,borderColor:'#999',borderDash:[4,4],fill:false},"
-        "{label:'hi',data:his,borderColor:'#999',borderDash:[4,4],fill:false}]},"
-        "options:{responsive:true}});"
+        "{label:'range lo',data:los,borderColor:'rgba(0,0,0,0)',"
+        "pointRadius:0,fill:false},"
+        "{label:'trial band',data:his,borderColor:'rgba(0,0,0,0)',"
+        "pointRadius:0,fill:'-1',backgroundColor:'rgba(178,194,72,0.25)'},"
+        "{label:'mean tok/s',data:means,borderColor:'#292929',borderWidth:2,"
+        "pointBackgroundColor:ptcolors,pointBorderColor:ptcolors,"
+        "pointRadius:4,fill:false}]},"
+        "options:{responsive:true,"
+        "plugins:{legend:{position:'bottom',labels:{filter:function(it){"
+        "return it.text!=='range lo';}}}},"
+        "scales:{y:{title:{display:true,text:'tok/s'}},"
+        "x:{ticks:{maxRotation:45,minRotation:45,maxTicksLimit:14}}}}});"
         "</script></section>"
+    )
+
+
+def _cost(events: list[dict[str, Any]]) -> str:
+    """GPU spend per trial as CSS bars, with the run total."""
+    trials = [e for e in events if e.get("type") == "trial_result"]
+    spends = [float(e.get("gpu_seconds", 0.0) or 0.0) for e in trials]
+    if not trials or not any(spends):
+        return ""
+    start = next((e for e in events if e.get("type") == "run_start"), {})
+    rate = float(start.get("gpu_cost_per_hour") or FALLBACK_GPU_COST_PER_HOUR)
+    peak = max(spends)
+    rows = "".join(
+        "<div class='costrow'>"
+        f"<span class='costsha'>{_esc(str(t.get('sha', ''))[:12])}</span>"
+        "<span class='costbar'>"
+        f"<i style='width:{s / peak * 100.0:.1f}%'></i>"
+        "</span>"
+        f"<span class='costv'>{s / 60.0:.1f} min · ${s / 3600.0 * rate:.2f}</span>"
+        "</div>"
+        for t, s in zip(trials, spends, strict=True)
+    )
+    total_s = math.fsum(spends)
+    return (
+        "<section><h2>GPU spend</h2>"
+        "<div class='card'>"
+        f"{rows}"
+        f"<p class='v-cap'>Total {total_s / 60.0:.1f} min · "
+        f"${total_s / 3600.0 * rate:.2f} @ ${rate:.2f}/h. "
+        "Trials are the only spend.</p>"
+        "</div></section>"
     )
 
 
@@ -666,6 +731,15 @@ CSS = (
     "canvas#tput{max-height:300px}"
     "ul.quals{margin:.5rem 0;padding-left:1.2rem;font-size:.88rem}"
     "ul.quals li{margin:.2rem 0}"
+    ".costrow{display:grid;grid-template-columns:7rem 1fr 11rem;gap:.7rem;"
+    "align-items:center;margin:.3rem 0;font-size:.82rem}"
+    ".costsha{font-family:'IBM Plex Mono',monospace}"
+    ".costbar{display:block;height:.55rem;background:var(--sunken);border-radius:4px}"
+    ".costbar i{display:block;height:100%;background:var(--olive);border-radius:4px}"
+    ".costv{font-family:'IBM Plex Mono',monospace;color:var(--graphite);"
+    "white-space:nowrap}"
+    "@media(max-width:640px){.costrow{grid-template-columns:5rem 1fr}"
+    ".costrow .costv{white-space:normal}}"
     "@media(max-width:640px){.v-grid{grid-template-columns:1fr}.v-num{font-size:2.4rem}}"
 )
 
@@ -712,6 +786,7 @@ def render_report(events_path: str | Path, live: bool = False) -> str:
         body += _explanation(events)
     if has_tune:
         body += _tune(events)
+    body += _cost(events)
     body += _repro(events)
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"

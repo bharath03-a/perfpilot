@@ -475,6 +475,44 @@ def test_timeline_falls_back_to_trial_status_and_truncates_reasons(
     assert f"title='{long_reason}'" in html_doc  # full text in tooltip
 
 
+def test_throughput_chart_colors_points_and_shows_band(tmp_path: Path):
+    events = [
+        {"ts": "t0", "run_id": "r", "type": "run_start", "gpu_cost_per_hour": 2.10},
+        {
+            "ts": "t1",
+            "run_id": "r",
+            "type": "trial_result",
+            "sha": "goodsha",
+            "status": "ok",
+            "runs": [3600.0, 3580.0],
+            "gpu_seconds": 60.0,
+        },
+        {
+            "ts": "t2",
+            "run_id": "r",
+            "type": "trial_result",
+            "sha": "badsha",
+            "status": "ok",
+            "runs": [1800.0, 1790.0],
+            "gpu_seconds": 120.0,
+        },
+        {
+            "ts": "t3",
+            "run_id": "r",
+            "type": "verdict",
+            "sha": "badsha",
+            "label": "bad",
+        },
+        {"ts": "t4", "run_id": "r", "type": "run_end", "status": "culprit"},
+    ]
+    html_doc = render_report(_write_events(tmp_path, events))
+    assert "ptcolors" in html_doc  # per-verdict point colors
+    assert "trial band" in html_doc  # interval band dataset
+    assert "#B3261E" in html_doc  # bad verdict color present
+    assert "GPU spend" in html_doc
+    assert "$0.11" in html_doc  # 180s @ $2.10/h
+
+
 def test_tune_no_winner_renders_baseline_kept(tmp_path: Path):
     events = [
         {"ts": "t0", "run_id": "r", "type": "run_start", "gpu_cost_per_hour": 2.10},

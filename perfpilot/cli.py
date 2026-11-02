@@ -342,7 +342,7 @@ def eval(
         summary = drive_eval_trial(
             commits,
             culprit_index=pos,
-            inject_kind="enforce-eager",
+            inject_kind="enforce_eager",
             make_measure=lambda inject_for, record: modal_measure_factory(
                 "perfpilot-worker",
                 "Worker",

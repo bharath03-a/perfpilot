@@ -37,7 +37,7 @@ def test_driver_finds_planted_culprit_and_hides_index(tmp_path) -> None:
     summary = drive_eval_trial(
         commits,
         culprit_index=9,
-        inject_kind="enforce-eager",
+        inject_kind="enforce_eager",
         make_measure=_fake_factory(3800.0, 0.20, seed=7),
         run_id="test-eval-1",
         runs_root=str(tmp_path),
@@ -101,7 +101,7 @@ def test_driver_retries_error_once_then_proceeds(tmp_path) -> None:
     summary = drive_eval_trial(
         commits,
         culprit_index=9,
-        inject_kind="enforce-eager",
+        inject_kind="enforce_eager",
         make_measure=make_measure,
         run_id="retry-test",
         runs_root=str(tmp_path),
@@ -285,6 +285,24 @@ def test_live_bisect_skips_explain_on_fetch_failure(tmp_path, monkeypatch) -> No
     assert '"type": "explain"' not in events
 
 
+def test_eval_rejects_unknown_inject_kind_before_any_trial(tmp_path) -> None:
+    """The eval/CLI vocabulary bug class: an invalid kind must fail loud
+    before spending GPU, not inside the first trial."""
+    import pytest
+
+    from perfpilot.modes.driver import drive_eval_trial
+
+    with pytest.raises(ValueError, match="unknown injection kind"):
+        drive_eval_trial(
+            [f"k{i:02d}{'0' * 36}" for i in range(16)],
+            culprit_index=1,
+            inject_kind="enforce-eager",
+            make_measure=lambda inject_for, record: None,
+            run_id="bad-kind",
+            runs_root=str(tmp_path),
+        )
+
+
 def test_eval_aborts_when_gpu_changes_mid_run(tmp_path) -> None:
     """Two distinct GPU UUIDs across trials -> endpoint_error, no verdict."""
     import random
@@ -318,7 +336,7 @@ def test_eval_aborts_when_gpu_changes_mid_run(tmp_path) -> None:
     summary = drive_eval_trial(
         commits,
         culprit_index=9,
-        inject_kind="enforce-eager",
+        inject_kind="enforce_eager",
         make_measure=make_measure,
         run_id="gpu-swap",
         runs_root=str(tmp_path),

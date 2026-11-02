@@ -48,7 +48,7 @@ perfpilot demo runs/&lt;run-id&gt;</pre>
     <div class="stat" role="listitem"><b>0</b><span>wrong verdicts on real A100 runs</span></div>
     <div class="stat" role="listitem"><b>90%</b><span>Welch log-ratio interval on every claim</span></div>
     <div class="stat" role="listitem"><b>$6.23</b><span>total metered GPU spend, stated per run</span></div>
-    <div class="stat" role="listitem"><b>182</b><span>pytest tests green, ruff clean</span></div>
+    <div class="stat" role="listitem"><b>184</b><span>pytest tests green, ruff clean</span></div>
   </div>
 
   <section class="block" id="how">
@@ -77,6 +77,10 @@ perfpilot demo runs/&lt;run-id&gt;</pre>
   <section class="block" id="results">
     <h2>Results</h2>
     <p class="sub">Headline invariant: 0 wrong verdicts, every claim carries an interval, cost stated per run. Local ($0, fake transport) and GPU tables are different instruments — never merged.</p>
+    <figure class="report-frame" style="padding:1rem">
+      <img src="assets/cliff.svg" alt="Per-run throughput in m2-eval-9: clean baseline near 3590, one collapsed run at 1703, injected commits near 1190" style="width:100%;height:auto;display:block">
+    </figure>
+    <p class="report-meta">Every measured run of m2-eval-9, in order. The red point is the collapsed run that poisoned the baseline — caught, fixed, and regression-tested (<code>baseline_max_spread</code>).</p>
     <h3>GPU eval · Modal A100-40GB · $4.63</h3>
     <table class="data">
       <tr><th>Trial</th><th>Planted</th><th>Verdict</th><th>Reading</th></tr>
