@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PerfPilot — Architecture</title>
+<meta name="theme-color" content="#F7F7F2">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -217,7 +219,7 @@ const SECTIONS = [
 function Rail({ active }) {
   return (
     <aside className="rail">
-      <a className="brand" href="#top">PerfPilot</a>
+      <a className="brand" href="index.html" style={{display:"flex",alignItems:"center",gap:".55rem"}}><img src="assets/logo.svg" alt="" width="26" height="26" />PerfPilot</a>
       <nav aria-label="Sections">
         {SECTIONS.map(([id, label]) => (
           <a key={id} href={"#" + id} aria-current={active === id ? "true" : undefined}>{label}</a>
@@ -570,7 +572,7 @@ function App() {
           <p>An agent for vLLM performance. PerfBisect locates the first slow commit. TuneSmith recovers speed
           through serve flags. Every verdict rests on a measured interval, and the brain only proposes.</p>
           <dl className="facts">
-            <div><dt>Tests</dt><dd>153 passing</dd></div>
+            <div><dt>Tests</dt><dd>181 passing</dd></div>
             <div><dt>Metered GPU</dt><dd>A100-40GB, $2.10/h</dd></div>
             <div><dt>Local logic</dt><dd>$0, no GPU</dd></div>
             <div><dt>Advisor</dt><dd>muse-spark-open on Baseten</dd></div>

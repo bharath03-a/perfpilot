@@ -1,0 +1,9 @@
+{"ts": "2026-11-01T22:09:05.806046+00:00", "run_id": "tune-20261101-150900", "type": "run_start", "mode": "tune", "base_commit": "e5196e2959a42908313510f55fa21f213a48802e", "gpu_cost_per_hour": 2.1}
+{"ts": "2026-11-01T22:54:33.736925+00:00", "run_id": "tune-20261101-150900", "type": "tune_candidate", "knob": "enable_prefix_caching", "value": true, "config": {"enable_prefix_caching": true}, "reason": "interval not fully above +2%: reject"}
+{"ts": "2026-11-01T22:54:33.738506+00:00", "run_id": "tune-20261101-150900", "type": "tune_candidate", "knob": "max_num_batched_tokens", "value": 8192, "config": {"max_num_batched_tokens": 8192}, "reason": "interval not fully above +2%: reject"}
+{"ts": "2026-11-01T22:54:33.738623+00:00", "run_id": "tune-20261101-150900", "type": "tune_candidate", "knob": "async_scheduling", "value": true, "config": {"async_scheduling": true}, "reason": "interval not fully above +2%: reject"}
+{"ts": "2026-11-01T22:54:33.738739+00:00", "run_id": "tune-20261101-150900", "type": "tune_candidate", "knob": "kv_cache_dtype", "value": "fp8", "config": {"kv_cache_dtype": "fp8"}, "reason": "measure failed: RuntimeError"}
+{"ts": "2026-11-01T22:54:33.738929+00:00", "run_id": "tune-20261101-150900", "type": "tune_candidate", "knob": "max_num_seqs", "value": 256, "config": {"max_num_seqs": 256}, "reason": "interval not fully above +2%: reject"}
+{"ts": "2026-11-01T22:54:33.739023+00:00", "run_id": "tune-20261101-150900", "type": "tune_candidate", "knob": "max_num_batched_tokens", "value": 16384, "config": {"max_num_batched_tokens": 16384}, "reason": "interval not fully above +2%: reject"}
+{"ts": "2026-11-01T22:54:33.739148+00:00", "run_id": "tune-20261101-150900", "type": "quality_check", "accuracy": 2.0, "baseline_accuracy": 2.0, "drop_pts": 0.0, "passed": true, "reason": "baseline reference"}
+{"ts": "2026-11-01T22:54:33.739216+00:00", "run_id": "tune-20261101-150900", "type": "run_end", "status": "done"}

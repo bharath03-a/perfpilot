@@ -520,15 +520,23 @@ def render_report(events_path: str | Path, live: bool = False) -> str:
         Path(events_path).parent.name,
     )
     refresh = "<meta http-equiv='refresh' content='5'>" if live else ""
-    body = (
-        _verdict_card(events)
-        + _timeline(events)
-        + _chart(events)
-        + _agent_panel(events)
-        + _explanation(events)
-        + _tune(events)
-        + _repro(events)
+    types = {e.get("type") for e in events}
+    has_bisect = bool(
+        types & {"trial_result", "trial_start", "verdict", "boundary_update", "culprit"}
     )
+    has_tune = bool(types & {"tune_candidate", "tune_accept", "tune_result"})
+    has_agent = bool(types & {"agent_call"})
+    has_explain = bool(types & {"explain"})
+    body = ""
+    if has_bisect:
+        body += _verdict_card(events) + _timeline(events) + _chart(events)
+    if has_agent:
+        body += _agent_panel(events)
+    if has_explain:
+        body += _explanation(events)
+    if has_tune:
+        body += _tune(events)
+    body += _repro(events)
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>PerfPilot report — {_esc(run_id)}</title>{refresh}"

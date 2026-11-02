@@ -3,121 +3,162 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PerfPilot — Docs</title>
+<title>PerfPilot — the agent that finds the commit that slowed your vLLM deployment</title>
+<meta name="description" content="PerfPilot: PerfBisect finds the first slow vLLM commit, TuneSmith recovers speed via serve flags. Every claim benchmark-verified with intervals.">
+<meta name="theme-color" content="#F7F7F2">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bench:#F7F7F2; --panel:#FFFFFF; --sunken:#F2F2EC; --ink:#292929; --graphite:#72726E;
-    --rule:#E3E3DE; --olive:#5B6F00; --olive-hover:#4C5616; --lime:#B2C248; --tint:#F2F6E1;
-    --serif:"Instrument Serif", Georgia, "Times New Roman", serif;
-    --sans:"IBM Plex Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
-    --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
-  }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bench); color:var(--ink); font:400 1rem/1.5 var(--sans);
-         -webkit-font-smoothing:antialiased; }
-  a { color:inherit; }
-  :focus-visible { outline:2px solid var(--olive); outline-offset:3px; border-radius:4px; }
-  code { font:400 .86em var(--mono); background:var(--sunken); border:1px solid var(--rule);
-         border-radius:4px; padding:.05rem .35rem; }
-
-  .top { max-width:1080px; margin:0 auto; padding:1.2rem 1.25rem; display:flex; align-items:center; gap:1.4rem; }
-  .brand { font:400 1.35rem var(--serif); text-decoration:none; margin-right:auto; }
-  .top a.link { font-size:.92rem; text-decoration:none; color:var(--ink); padding:.45rem .9rem;
-                border:1px solid var(--rule); border-radius:999px; background:var(--panel); }
-  .top a.link:hover { border-color:var(--ink); }
-
-  .hero { max-width:1080px; margin:0 auto; padding:3.6rem 1.25rem 3rem; }
-  .eyebrow { display:inline-flex; align-items:center; gap:.5rem; font-size:.9rem; color:var(--graphite);
-             border:1px solid var(--rule); border-radius:999px; padding:.3rem .9rem .3rem .4rem; background:var(--panel); }
-  .eyebrow b { background:var(--lime); color:var(--ink); font-weight:500; border-radius:999px; padding:.05rem .55rem; }
-  h1 { margin:1.2rem 0 1rem; font:400 clamp(3rem,8vw,5.6rem)/.96 var(--serif); letter-spacing:-.015em; max-width:12ch; }
-  .hero p { margin:0; max-width:56ch; font-size:1.12rem; color:var(--graphite); }
-  .actions { display:flex; flex-wrap:wrap; gap:.7rem; margin-top:2rem; }
-  .btn { display:inline-flex; align-items:center; gap:.45rem; padding:.7rem 1.2rem; border-radius:8px;
-         font-weight:500; font-size:.95rem; text-decoration:none; border:1px solid transparent; }
-  .btn.primary { background:var(--olive); color:#fff; }
-  .btn.primary:hover { background:var(--olive-hover); }
-  .btn.secondary { background:var(--panel); border-color:var(--rule); color:var(--ink); }
-  .btn.secondary:hover { border-color:var(--ink); }
-
-  main { max-width:1080px; margin:0 auto; padding:0 1.25rem 3rem; }
-  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:1rem; }
-  .card { background:var(--panel); border:1px solid var(--rule); border-radius:8px; padding:1.25rem 1.3rem;
-          text-decoration:none; color:inherit; display:block; }
-  a.card:hover { border-color:var(--ink); }
-  .card h3 { margin:0 0 .4rem; font:400 1.45rem/1.15 var(--serif); }
-  .card p { margin:0; font-size:.92rem; color:var(--graphite); }
-  .card .go { display:inline-block; margin-top:.8rem; font-size:.9rem; color:var(--olive); font-weight:500; }
-
-  h2 { margin:3rem 0 .8rem; font:400 2.1rem/1.1 var(--serif); }
-  pre { background:var(--panel); border:1px solid var(--rule); border-radius:8px; padding:1.1rem 1.3rem;
-        overflow:auto; font:400 .88rem/1.6 var(--mono); }
-  pre code { background:none; border:0; padding:0; font-size:inherit; }
-  p.note { max-width:68ch; color:var(--graphite); margin:.9rem 0 0; }
-
-  footer { max-width:1080px; margin:0 auto; padding:0 1.25rem 2.5rem; font-size:.85rem; color:var(--graphite); }
-
-  @media (prefers-reduced-motion:reduce) { * { transition:none !important; } }
-</style>
+<link rel="stylesheet" href="assets/theme.css">
 </head>
 <body>
-<header class="top">
-  <a class="brand" href="index.html">PerfPilot</a>
-  <a class="link" href="architecture.html">Architecture</a>
-</header>
+<div class="wrap">
 
-<section class="hero">
-  <span class="eyebrow"><b>New</b> Bisect and tune on one warm A100</span>
-  <h1>PerfPilot</h1>
-  <p>An agent that keeps a vLLM deployment of a Meta open model fast. PerfBisect finds the first slow commit.
-  TuneSmith recovers speed through serve flags. Every claim comes with a measured interval.</p>
-  <div class="actions">
-    <a class="btn primary" href="architecture.html">Read the architecture</a>
-    <a class="btn secondary" href="#quickstart">Quickstart</a>
-  </div>
-</section>
+  <header class="top">
+    <a class="brand" href="./"><img src="assets/logo.svg" alt="PerfPilot logo"><b>PerfPilot</b></a>
+    <nav>
+      <a href="#results">Results</a>
+      <a href="#reports">Reports</a>
+      <a href="architecture.html">Architecture</a>
+      <a class="cta" href="https://github.com/bharath03-a/perfpilot">GitHub</a>
+    </nav>
+  </header>
 
-<main>
-  <div class="cards">
-    <a class="card" href="architecture.html">
-      <h3>Architecture</h3>
-      <p>Planes, module contracts and the bisect flowchart, as interactive diagrams.</p>
-      <span class="go">Open the diagrams</span>
-    </a>
-    <div class="card">
-      <h3>Cost model</h3>
-      <p>Local logic is $0. Modal A100-40GB is $2.10/h. The Baseten brain bills per call. Only GPU trials and quality probes spend.</p>
+  <div class="hero">
+    <div>
+      <h1>The agent that finds the commit that <em>slowed your deployment</em> — and proves it.</h1>
+      <p class="lede">PerfPilot keeps a vLLM deployment of a Meta open model fast.
+      <b>PerfBisect</b> finds the first slow commit; <b>TuneSmith</b> tries to win
+      speed back with serve flags. The brain proposes — benchmarks dispose.
+      Every claim carries a statistical interval, or it doesn't ship.</p>
     </div>
-    <div class="card">
-      <h3>Evidence</h3>
-      <p>14 typed event types go to <code>events.jsonl</code> (plus agent calls from <code>agent-events.jsonl</code>), then <code>report.html</code>. Any run re-renders offline.</p>
-    </div>
-    <div class="card">
-      <h3>Status</h3>
-      <p>M0 and M1 are green. M2 is GPU-evaluated (0 wrong verdicts, $4.63), M3 brain live-probed, M4 tune GPU-evaluated (honest negative: baseline kept). See the Status section of the architecture page.</p>
+    <div class="usage">
+      <p>$ try it — reports re-render offline</p>
+      <pre><span class="c"># find the culprit</span>
+perfpilot bisect --good G --bad B
+<span class="c"># recover speed</span>
+perfpilot tune --commit C
+<span class="c"># replay any run, no GPU needed</span>
+perfpilot demo runs/&lt;run-id&gt;</pre>
     </div>
   </div>
 
-  <h2 id="quickstart">Quickstart</h2>
-  <pre><code>uv sync --group dev
-printf 'PERFPILOT_LLM_API_KEY=%s\n' 'your-key' &gt; .env   # optional: no key means deterministic fallbacks
-uv run modal secret create huggingface HF_TOKEN=&lt;token&gt;
-uv run modal deploy perfpilot/worker/modal_app.py
-uv run perfpilot bisect --good &lt;sha&gt; --bad &lt;sha&gt;
-uv run perfpilot report runs/&lt;run-id&gt;</code></pre>
-  <p class="note">GPU trials need Modal quota and your go-ahead. The expected cost is stated before every GPU run,
-  and M1 stays under the ~$8 Sat-noon gate.</p>
+  <div class="stats" role="list">
+    <div class="stat" role="listitem"><b>0</b><span>wrong verdicts on real A100 runs</span></div>
+    <div class="stat" role="listitem"><b>90%</b><span>Welch log-ratio interval on every claim</span></div>
+    <div class="stat" role="listitem"><b>$6.23</b><span>total metered GPU spend, stated per run</span></div>
+    <div class="stat" role="listitem"><b>181</b><span>pytest tests green, ruff clean</span></div>
+  </div>
 
-  <h2>Run reports</h2>
-  <p class="note">Each run directory holds <code>config.yaml</code>, <code>events.jsonl</code>, <code>report.html</code>,
-  <code>results/</code> and <code>logs/</code>, plus <code>fix.patch</code> when one is drafted. Re-render any recorded run with
-  <code>perfpilot report runs/&lt;id&gt;</code>. No GPU needed. <code>watch</code> writes the same page with a 5s auto-reload.
-  Brain calls land in <code>agent-events.jsonl</code> beside it.</p>
-</main>
+  <section class="block" id="how">
+    <h2>Two planes</h2>
+    <p class="sub">A free local control plane decides and proves; a metered Modal A100 plane only measures. The Baseten brain only advises.</p>
+    <div class="planes">
+      <div class="plane free">
+        <span class="tag">$0 · local</span>
+        <h3>Control plane</h3>
+        <p>Bisect driver, Welch-interval stats, TuneSmith, HTML reports. Every agent proposal is schema-validated with a deterministic fallback — runs complete with no key.</p>
+      </div>
+      <div class="plane metered">
+        <span class="tag">$2.10/h · Modal A100-40GB</span>
+        <h3>Measurement plane</h3>
+        <p>One warm container serves one commit's wheel at a time; pinned GPU, same-UUID enforced, failed requests invalidate the run. Trials are the only spend.</p>
+      </div>
+    </div>
+  </section>
 
-<footer>PerfPilot · Meta Global AI Developer Hackathon · Indie · Push the Frontier</footer>
+  <section class="block" id="video">
+    <h2>Demo</h2>
+    <p class="sub">Three minutes: the cliff, the narrowing, the honest negative. Recorded runs only — no live GPU was harmed.</p>
+    <div class="video-frame" id="video-slot"></div>
+  </section>
+
+  <section class="block" id="results">
+    <h2>Results</h2>
+    <p class="sub">Headline invariant: 0 wrong verdicts, every claim carries an interval, cost stated per run. Local ($0, fake transport) and GPU tables are different instruments — never merged.</p>
+    <h3>GPU eval · Modal A100-40GB · $4.63</h3>
+    <table class="data">
+      <tr><th>Trial</th><th>Planted</th><th>Verdict</th><th>Reading</th></tr>
+      <tr><td>m2-eval-9</td><td>strong overlay, commit 1 of 16</td><td>15-wide range, culprit inside, unverified</td><td>Correct by inclusion. One collapsed baseline run ([3569, 3594, 1703] tok/s) poisoned variance → fixed with endpoint re-measure, regression-tested.</td></tr>
+      <tr><td>m2-eval-10</td><td>mild overlay, last commit</td><td><code>no_regression</code></td><td>Correct: the overlay measured −0.8%, so there was no regression to find. Overlay dropped per the ≥10% keep rule.</td></tr>
+    </table>
+    <br>
+    <h3>Tune · $1.60 · honest negative</h3>
+    <table class="data">
+      <tr><th>Candidates</th><th>Outcome</th></tr>
+      <tr><td>prefix-caching, batch-tokens 8k/16k, async scheduling, fp8 KV, seqs-256</td><td>Five cleared nothing above the +2% interval bar; fp8 can't run on A100 and was logged as a rejection. Baseline kept, quality held.</td></tr>
+    </table>
+  </section>
+
+  <section class="block" id="reports">
+    <h2>Recorded reports</h2>
+    <p class="sub">The actual run artifacts, embedded. Verdict card, bisect timeline, throughput chart, agent proposal log, reproducibility block.</p>
+    <div class="tabs" role="tablist" aria-label="Recorded runs">
+      <button role="tab" aria-selected="true" data-run="m2-eval-9">m2-eval-9 · bisect</button>
+      <button role="tab" aria-selected="false" data-run="m2-eval-10">m2-eval-10 · bisect</button>
+      <button role="tab" aria-selected="false" data-run="tune-20261101-150900">tune · flags</button>
+    </div>
+    <div class="report-frame">
+      <iframe id="report-view" title="Recorded PerfPilot run report" src="runs/m2-eval-9/report.html"></iframe>
+    </div>
+    <p class="report-meta" id="report-meta"></p>
+  </section>
+
+  <section class="block" id="eligibility">
+    <h2>Hackathon eligibility</h2>
+    <ul class="ticks">
+      <li><b>Open weights throughout:</b> measured model <code>meta-llama/Llama-3.2-1B</code>, agent brain <code>meta-models/muse-spark-open-1026</code> on Baseten.</li>
+      <li><b>Agentic loop:</b> brain proposes, driver measures, stats disposes — accepted/rejected proposal log in every run's <code>events.jsonl</code>.</li>
+      <li><b>Built during the event:</b> Indie track, Push the Frontier. All code in <code>perfpilot/</code> written this week on a clean layout.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <img src="assets/logo.svg" alt="">
+    <span>PerfPilot · Meta Global AI Developer Hackathon, Indie (Push the Frontier)</span>
+    <span class="spacer"></span>
+    <a href="https://github.com/bharath03-a/perfpilot">Repo</a>
+    <a href="architecture.html">Architecture</a>
+  </footer>
+
+</div>
+<script>
+(function () {
+  // Paste the YouTube video ID here when the demo is uploaded.
+  var VIDEO_ID = "";
+  var slot = document.getElementById("video-slot");
+  if (VIDEO_ID) {
+    var f = document.createElement("iframe");
+    f.src = "https://www.youtube-nocookie.com/embed/" + VIDEO_ID;
+    f.title = "PerfPilot demo video";
+    f.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+    f.allowFullscreen = true;
+    slot.appendChild(f);
+  } else {
+    slot.innerHTML = '<div class="video-soon"><img src="assets/logo.svg" alt="">' +
+      "<p>VIDEO WALKTHROUGH — COMING SOON</p></div>";
+  }
+
+  var META = {
+    "m2-eval-9": "26 probes · culprit e5196e29 · regression −60.1% (derived) · unverified · $3.32 — <a href=\"runs/m2-eval-9/report.html\">open full page</a> · <a href=\"runs/m2-eval-9/events.jsonl\">events.jsonl</a>",
+    "m2-eval-10": "correct no_regression · mild overlay measured −0.8% · $1.31 — <a href=\"runs/m2-eval-10/report.html\">open full page</a> · <a href=\"runs/m2-eval-10/events.jsonl\">events.jsonl</a>",
+    "tune-20261101-150900": "6 candidates · baseline kept · quality held · ~$1.60 — <a href=\"runs/tune-20261101-150900/report.html\">open full page</a> · <a href=\"runs/tune-20261101-150900/events.jsonl\">events.jsonl</a>"
+  };
+  var view = document.getElementById("report-view");
+  var meta = document.getElementById("report-meta");
+  function select(run, btn) {
+    view.src = "runs/" + run + "/report.html";
+    meta.innerHTML = META[run];
+    document.querySelectorAll(".tabs button").forEach(function (b) {
+      b.setAttribute("aria-selected", b === btn ? "true" : "false");
+    });
+  }
+  document.querySelectorAll(".tabs button").forEach(function (b) {
+    b.addEventListener("click", function () { select(b.dataset.run, b); });
+  });
+  meta.innerHTML = META["m2-eval-9"];
+})();
+</script>
 </body>
 </html>

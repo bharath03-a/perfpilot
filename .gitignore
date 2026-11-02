@@ -13,8 +13,10 @@ __pycache__/
 htmlcov/
 
 # PerfPilot runs (GPU artifacts, local only)
-runs/
+/runs/
 *.jsonl
+# ...except the curated copies embedded in the Pages site
+!docs/runs/**
 
 # Secrets / local config overrides
 .env
