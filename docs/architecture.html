@@ -263,15 +263,15 @@ function Planes() {
           <defs>{marker("ha", "#72726E")}{marker("haR", "#BD4A30")}</defs>
           <text x="30" y="30" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#2F5D8A">control plane · local · $0</text>
           <rect x="10" y="40" width="940" height="180" rx="6" fill="#F2F2EC" stroke="#2F5D8A" strokeWidth="1" />
-          <text x="30" y="262" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#BD4A30">measurement plane · Modal A100-40GB · $2.10/h</text>
+          <text x="430" y="292" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#BD4A30">measurement plane · Modal A100 · $2.10/h</text>
           <rect x="10" y="272" width="940" height="152" rx="6" fill="#FBF1EE" stroke="#BD4A30" strokeWidth="1" />
           {HIGH_NODES.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
-          <Edge id="ha" d="M230,140 L260,140" label="ask" lx={245} ly={132} />
-          <Edge id="ha" d="M130,80 L130,56 L606,56 L606,76" label="samples → verdict · events → report" lx={368} ly={50} />
-          <Edge id="ha" d="M837,200 L837,212 L190,212 L190,204" label="config · commit list" lx={520} ly={208} />
-          <Edge id="haR" color="#BD4A30" bold d="M90,224 L90,296" label="run_trial $$$" lx={94} ly={262} />
-          <Edge id="haR" color="#BD4A30" dashed d="M170,296 L170,228" label="TrialResult" lx={208} ly={266} />
-          <Edge id="haR" color="#BD4A30" bold d="M222,222 L400,296" label="answer_batch $$$" lx={352} ly={238} />
+          <Edge id="ha" d="M230,140 L260,140" label="ask" lx={243} ly={154} />
+          <Edge id="ha" d="M130,80 L130,56 L606,56 L606,76" label="samples → verdict · events → report" lx={368} ly={48} />
+          <Edge id="ha" d="M837,200 L837,212 L190,212 L190,204" label="config · commits" lx={770} ly={214} />
+          <Edge id="haR" color="#BD4A30" bold d="M90,224 L90,296" label="run_trial $$$" lx={90} ly={238} />
+          <Edge id="haR" color="#BD4A30" dashed d="M170,296 L170,228" label="TrialResult" lx={170} ly={260} />
+          <Edge id="haR" color="#BD4A30" bold d="M222,222 L400,296" label="answer_batch $$$" lx={342} ly={248} />
         </svg>
       </div>
       <Key items={[["blue", "decide"], ["teal", "advise"], ["green", "prove"], ["red", "spend"], ["slate", "ground"]]} />
