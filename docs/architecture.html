@@ -239,7 +239,7 @@ const HIGH_NODES = [
     desc: "muse-spark-open proposes commits, run counts, knob order and one-knob changes. Output is schema-validated with one retry. Out-of-range answers are rejected and replaced by a deterministic fallback, including when no key is set." },
   { id: "stats", x: 506, y: 80, w: 200, h: 120, tone: "green", title: "Stats + Reports",
     lines: ["log-ratio Welch interval", "events.jsonl → report.html"],
-    desc: "stats.py turns samples into verdicts (confirm, classify at m = R/2, tune_accepts). render.py builds the report from the event log." },
+    desc: "stats.py turns samples into verdicts (confirm, classify at m = R/2, tune_accepts). Guards: improvements are not regressions, non-finite samples raise, zero-variance intervals never decide. render.py builds the report from the merged event log." },
   { id: "cfg", x: 744, y: 80, w: 186, h: 120, tone: "slate", title: "Config + Git",
     lines: ["perfpilot.yaml · .env", "GitHub compare · wheels"],
     desc: "Model, workload, knobs and stats caps. Bisect ranges come from the GitHub compare API. Eval anchors a 16-commit range to the newest wheeled nightly. Secrets come from env only." },
@@ -299,28 +299,28 @@ const DETAIL_ROWS = [
       desc: "Per-SHA nightly wheels. A cached venv is rebuilt when its installed SHA differs. GitHub compare gives the bisect range; eval uses wheeled_range (newest nightly)." },
   ]},
   { label: "CLI · cli.py", boxes: [
-    { id: "cmds", x: 10, y: 150, w: 980, h: 72, tone: "blue", title: "bisect · tune · eval · report · watch",
+    { id: "cmds", x: 10, y: 150, w: 980, h: 72, tone: "blue", title: "bisect · tune · eval · report · watch · demo",
       lines: ["_load · _deployed_worker · _make_orchestrator (AgentOrchestrator, or None → deterministic fallbacks)"],
       desc: "Thin wiring. Loads config, looks up the deployed Modal Worker, builds the orchestrator when a key exists, and hands measure and quality callbacks to the drivers." },
   ]},
   { label: "Orchestration · modes/driver.py · bisect.py · tune.py · orchestrator.py", boxes: [
     { id: "dbis", x: 10, y: 266, w: 318, h: 88, tone: "blue", title: "drive_bisect_live · drive_eval_trial",
       lines: ["run_bisect loop · events · report", "eval: planted culprit · retry-once", "out: culprit / range + verify"],
-      desc: "Wrap run_bisect with a run dir, events and report. The eval driver plants an injected slowdown and retries a failed trial once. The live driver marks a failed trial skipped." },
+      desc: "Wrap run_bisect with a run dir, events and report. Failed-request runs are excluded from samples; a GPU UUID change aborts the run. Verdict and culprit events feed the timeline and verdict card. The live driver also fetches the culprit diff and asks the brain to explain it. The eval driver plants an injected slowdown and retries a failed trial once." },
     { id: "dtun", x: 341, y: 266, w: 318, h: 88, tone: "blue", title: "drive_tune_live",
       lines: ["one knob → measure → tune_accepts", "quality gate on numeric knobs", "out: best flags + serve_command"],
-      desc: "Wraps run_tuning. One-knob changes on the best config are accepted only above +2% with p99 TTFT at most 10% worse. Numeric knobs and the final config must pass the quality gate." },
+      desc: "Wraps run_tuning. One-knob changes on the best config are accepted only above +2% with p99 TTFT at most 10% worse. Numeric knobs and the final config must pass the quality gate. A tune_result event records best/confirmed/serve_command; with no winner the report says Baseline kept." },
     { id: "adap", x: 672, y: 266, w: 318, h: 88, tone: "teal", title: "make_pick_fn · extra_runs_fn · propose_fn",
       lines: ["AgentOrchestrator → driver callbacks", "fallback: middle · 2 runs · next untried"],
       desc: "Adapters from validated brain decisions to plain values. Every call logs an agent_call event. Rejected proposals return the deterministic fallback." },
   ]},
   { label: "Intelligence · agent/ + stats.py", boxes: [
     { id: "spark", x: 10, y: 398, w: 485, h: 88, tone: "teal", title: "SparkClient · complete_validated · prompts",
-      lines: ["PickCommit · ExtraRuns · RankKnobs · ProposeConfig", "pydantic schema · one retry · key env → .env"],
+      lines: ["PickCommit · ExtraRuns · RankKnobs · ProposeConfig · ExplainCulprit", "pydantic schema · one retry · key env → .env"],
       desc: "OpenAI-compatible Baseten client. Each response is stripped to JSON and validated. A second failure raises, and the orchestrator falls back." },
     { id: "class", x: 508, y: 398, w: 482, h: 88, tone: "green", title: "confirm_regression · classify_commit · tune_accepts",
       lines: ["log-ratio Welch interval · midpoint m = R/2", "good / bad / inconclusive / no_regression"],
-      desc: "The verdict math. Endpoints need a significant effect of at least 3%. A probe is good or bad only when its whole interval clears m = R/2." },
+      desc: "The verdict math. Endpoints need a significant negative effect of at least 3%: a significant improvement is no_regression, not a culprit. A probe is good or bad only when its whole interval clears m = R/2. Non-finite samples raise (mapped to inconclusive/skip upstream); zero-variance intervals never decide." },
   ]},
   { label: "Execution · worker/ on one warm Modal A100-40GB", boxes: [
     { id: "wapp", x: 10, y: 530, w: 155, h: 88, tone: "red", title: "modal_app.py",
@@ -364,8 +364,8 @@ function Modules() {
           <Edge id="da" d="M500,618 L500,636" label="events → render" lx={560} ly={630} />
           <rect x="10" y="640" width="980" height="100" rx="6" fill="#F2F6E1" stroke="#5B6F00" strokeWidth="1.2" />
           <text x="500" y="668" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="IBM Plex Sans, sans-serif" fill="#292929">Evidence · runs/&lt;run-id&gt;/events.jsonl (14 event types) → render.py → report.html</text>
-          <text x="500" y="688" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">config.yaml · agent-events.jsonl · results/&lt;sha&gt;__&lt;flags&gt;/ · logs/ · fix.patch if drafted</text>
-          <text x="500" y="706" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">perfpilot report re-renders offline · watch adds a 5s auto-reload · partial runs render honestly</text>
+          <text x="500" y="688" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">config.yaml · events.jsonl + agent-events.jsonl (merged) · results/&lt;sha&gt;__&lt;flags&gt;/ · logs/</text>
+          <text x="500" y="706" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">perfpilot report re-renders offline · watch adds a 5s auto-reload · demo replays a run event by event · partial runs render honestly</text>
         </svg>
       </div>
       <Key items={[["slate", "inputs"], ["blue", "orchestrate"], ["teal", "brain"], ["green", "verdict"], ["red", "GPU spend"]]} />
@@ -394,9 +394,9 @@ const FLOW_NODES = [
     lines: ["error → endpoint_error", "skip → no_regression"],
     desc: "Early exit. The driver still writes culprit and run_end events and renders report.html." },
   { id: "conf", kind: "diamond", x: 295, y: 300, w: 210, h: 64, tone: "slate", title: "regression confirmed?",
-    desc: "confirm_regression: R = ln(bad/good). Needs an interval that excludes 0 and |R| of at least 3%. R becomes the full effect." },
+    desc: "confirm_regression: R = ln(bad/good). Needs an interval that excludes 0 and R at or below -3%: improvements and degenerate zero-variance samples stop as no_regression. R becomes the full effect." },
   { id: "e2", x: 30, y: 304, w: 210, h: 56, tone: "slate", title: "stop · no_regression",
-    lines: ["interval covers 0 or |R| < 3%"],
+    lines: ["covers 0 · improvement · |R| < 3% · degenerate"],
     desc: "Nothing to bisect. Recorded as no_regression instead of chasing noise." },
   { id: "open", kind: "diamond", x: 295, y: 384, w: 210, h: 64, tone: "slate", title: "open range left?",
     desc: "Loop check: boundaries more than one apart AND an untested, unskipped commit between them. No goes to culprit_of." },
@@ -524,13 +524,14 @@ const TUNE_STEPS = [
   ["Propose one change", "One knob moves at a time from the best config. Duplicates and no-op values are rejected."],
   ["Measure and accept", "tune_accepts requires the interval to sit fully above +2%, and p99 TTFT to stay within 10%."],
   ["Quality gate", "Numeric knobs such as kv_cache_dtype must stay within 2 points. The final config is re-checked, and a failure reverts it."],
+  ["Confirm or keep baseline", "The best config is re-measured at max_runs against baseline. A confirmed uplift ships with a paste-ready serve command; anything else keeps the baseline and says so."],
 ];
 
 /* ---------- 05 · decisions ---------- */
 const DECISIONS = [
   ["The brain decides, never measures.", "Every number comes from a GPU trial. The LLM proposes commits, extra-run counts, knob order and one-knob changes. Each answer is schema-validated and range-checked, with a deterministic fallback logged as an agent_call event."],
   ["Same GPU, every time.", "A pinned A100-40GB and one warm container (max_containers=1) for the whole run. The GPU UUID is re-checked on every trial, so a change is an error, never a comparison. Warmup runs before measured runs."],
-  ["Fail loudly, log everything.", "Secrets come from env only. Thirteen typed event types record ok, skip and error trial states, and endpoint_error and culprit_range outcomes. Nothing is silent or zero-filled."],
+  ["Fail loudly, log everything.", "Secrets come from env only. Fourteen typed event types record ok, skip and error trial states, per-commit verdicts, tune_result, and endpoint_error and culprit_range outcomes. Nothing is silent or zero-filled."],
   ["Quality is a gate, not a metric.", "Numeric knobs and the final TuneSmith config must stay within 2 points of baseline accuracy on the 50-question bank. Speed that costs quality is reverted."],
 ];
 
