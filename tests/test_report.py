@@ -449,6 +449,32 @@ def test_report_merges_sibling_agent_events(tmp_path: Path):
     assert "No agent calls logged" not in html_doc
 
 
+def test_timeline_falls_back_to_trial_status_and_truncates_reasons(
+    tmp_path: Path,
+):
+    """Runs without verdict events (older drivers) show trial status, and
+    multi-KB log tails are truncated with the full text in a tooltip."""
+    long_reason = "x" * 500
+    events = [
+        {"ts": "t0", "run_id": "r", "type": "run_start", "gpu_cost_per_hour": 2.10},
+        {
+            "ts": "t1",
+            "run_id": "r",
+            "type": "trial_result",
+            "sha": "erroredsha",
+            "status": "error",
+            "runs": [],
+            "reason": long_reason,
+        },
+        {"ts": "t2", "run_id": "r", "type": "run_end", "status": "endpoint_error"},
+    ]
+    html_doc = render_report(_write_events(tmp_path, events))
+    assert "trial: error" in html_doc
+    assert f">{'x' * 220}…" in html_doc  # cell shows truncated prefix
+    assert ("x" * 221) not in html_doc.replace(f"title='{long_reason}'", "")
+    assert f"title='{long_reason}'" in html_doc  # full text in tooltip
+
+
 def test_tune_no_winner_renders_baseline_kept(tmp_path: Path):
     events = [
         {"ts": "t0", "run_id": "r", "type": "run_start", "gpu_cost_per_hour": 2.10},

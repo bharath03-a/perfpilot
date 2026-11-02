@@ -165,6 +165,51 @@ def _endpoint_effect(events: list[dict[str, Any]]) -> tuple[float | None, str]:
     return math.log(mb / mg), " (derived from endpoint trials)"
 
 
+def _pill(label: str) -> str:
+    """Status pill for a bisect label or verify state."""
+    low = label.lower()
+    if low in ("good", "verified", "accepted", "pass"):
+        cls = "p-good"
+    elif low in ("bad", "fail", "error"):
+        cls = "p-bad"
+    elif low in ("skip", "skipped"):
+        cls = "p-skip"
+    elif low in ("ambiguous", "inconclusive", "unverified"):
+        cls = "p-amb"
+    else:
+        cls = "p-neutral"
+    return f"<span class='pill {cls}'>{_esc(label)}</span>"
+
+
+def _interval_bar(lo: float, hi: float, effect: float) -> str:
+    """Div-based interval bar with a zero tick and an effect marker."""
+    span_lo = min(0.0, lo)
+    span_hi = max(0.0, hi)
+    span = span_hi - span_lo or 1.0
+    pad = span * 0.08
+    span_lo -= pad
+    span_hi += pad
+    span = span_hi - span_lo
+
+    def _x(v: float) -> float:
+        return max(0.0, min(100.0, (v - span_lo) / span * 100.0))
+
+    left, right = _x(lo), _x(hi)
+    return (
+        "<div class='ibar' role='img' aria-label='effect interval'>"
+        f"<div class='rng' style='left:{left:.1f}%;"
+        f"width:{max(0.0, right - left):.1f}%'></div>"
+        f"<div class='zero' style='left:{_x(0.0):.1f}%'></div>"
+        f"<div class='mk' style='left:{_x(effect):.1f}%'></div>"
+        "</div>"
+        "<div class='iscale'>"
+        f"<span>{_esc(_pct(span_lo))}</span>"
+        "<span>0</span>"
+        f"<span>{_esc(_pct(span_hi))}</span>"
+        "</div>"
+    )
+
+
 def _verdict_card(events: list[dict[str, Any]]) -> str:
     culprit = next((e for e in reversed(events) if e.get("type") == "culprit"), {})
     verify = next((e for e in reversed(events) if e.get("type") == "verify"), {})
@@ -203,19 +248,31 @@ def _verdict_card(events: list[dict[str, Any]]) -> str:
         vtxt = "unverified"
     else:
         vtxt = "no verify step"
+    if effect is not None:
+        num_cls = "neg" if effect < 0 else "pos"
+        reg_block = (
+            f"<div class='v-num {num_cls}'>{_esc(_pct(effect))}</div>"
+            f"<div class='v-cap'>Regression interval [{_esc(_pct(lo))}, "
+            f"{_esc(_pct(hi))}]{_esc(note)}</div>"
+            + _interval_bar(float(lo), float(hi), float(effect))
+        )
+    else:
+        reg_block = (
+            "<div class='v-num'>n/a</div>"
+            "<div class='v-cap'>Regression (not logged for this run)</div>"
+        )
     return (
         "<section><h2>Verdict</h2><div class='card'>"
-        f"<p>Culprit: {culprit_txt}</p>"
-        f"<p>Regression: <b>{_esc(_pct(effect))}</b>"
-        + (
-            f" (interval [{_esc(_pct(lo))}, {_esc(_pct(hi))}]){_esc(note)}"
-            if effect is not None
-            else " (not logged for this run)"
-        )
-        + "</p>"
-        f"<p>Status: <b>{_esc(vtxt)}</b></p>"
-        f"<p>GPU: {gpu_min:.1f} min (${cost:.2f} @ ${rate:.2f}/h)</p>"
-        "</div></section>"
+        "<div class='v-grid'>"
+        "<div>"
+        f"{reg_block}"
+        "</div>"
+        "<table class='facts'>"
+        f"<tr><td>Culprit</td><td>{culprit_txt}</td></tr>"
+        f"<tr><td>Status</td><td>{_pill(vtxt)}</td></tr>"
+        f"<tr><td>GPU</td><td>{gpu_min:.1f} min (${cost:.2f} @ ${rate:.2f}/h)</td></tr>"
+        "</table>"
+        "</div></div></section>"
     )
 
 
@@ -247,32 +304,73 @@ def _timeline(events: list[dict[str, Any]]) -> str:
         elif e.get("reason") is not None and "reason" not in rec:
             rec["reason"] = e["reason"]
 
-    def _item(sha: str) -> str:
-        rec = info[sha]
-        label = str(rec.get("label", "?"))
-        cls = _LABEL_CLASS.get(label.lower(), "")
-        detail = ""
-        if rec.get("effect") is not None:
-            detail += f" effect {_esc(_pct(rec['effect']))}"
-            if rec.get("lo") is not None and rec.get("hi") is not None:
-                detail += f" [{_esc(_pct(rec['lo']))}, {_esc(_pct(rec['hi']))}]"
-        if rec.get("reason"):
-            detail += f": {_esc(rec['reason'])}"
-        return (
-            f"<li class='{cls}'><code>{_esc(sha)}</code> — {_esc(label)}{detail}</li>"
-        )
+    def _short(sha: str) -> str:
+        return f"<code class='sha' title='{_esc(sha)}'>{_esc(sha[:12])}</code>"
 
+    def _effect(rec: dict[str, Any]) -> str:
+        if rec.get("effect") is None:
+            return "—"
+        txt = _esc(_pct(rec["effect"]))
+        if rec.get("lo") is not None and rec.get("hi") is not None:
+            txt += f" [{_esc(_pct(rec['lo']))}, {_esc(_pct(rec['hi']))}]"
+        return txt
+
+    def _reason(rec: dict[str, Any]) -> str:
+        reason = str(rec.get("reason", "") or "")
+        if len(reason) <= 220:
+            return _esc(reason)
+        return f"<span title='{_esc(reason)}'>{_esc(reason[:220])}…</span>"
+
+    trial_status: dict[str, str] = {}
+    for e in events:
+        if e.get("type") == "trial_result" and e.get("sha"):
+            trial_status[str(e["sha"])] = str(e.get("status", ""))
+
+    def _label(sha: str) -> str:
+        label = str(info[sha].get("label", "?"))
+        if label != "?":
+            return _pill(label)
+        status = trial_status.get(sha, "")
+        if status in ("ok", "skip", "error"):
+            return _pill(f"trial: {status}")
+        return _pill("?")
+
+    rows = "".join(
+        "<tr>"
+        f"<td>{i + 1}</td>"
+        f"<td>{_short(s)}</td>"
+        f"<td>{_label(s)}</td>"
+        f"<td>{_effect(info[s])}</td>"
+        f"<td>{_reason(info[s])}</td>"
+        "</tr>"
+        for i, s in enumerate(order)
+    )
+    body = (
+        "<table class='grid'>"
+        "<tr><th>#</th><th>Commit</th><th>Label</th><th>Effect</th><th>Reason</th></tr>"
+        f"{rows}</table>"
+        if rows
+        else "<p>No commits tested yet.</p>"
+    )
     bounds = [e for e in events if e.get("type") == "boundary_update"]
-    items = "".join(_item(s) for s in order) or "<li>No commits tested yet.</li>"
     steps = "".join(
-        f"<li>{_esc(b.get('ts', ''))}: good=<code>{_esc(b.get('good', ''))}</code> "
-        f"bad=<code>{_esc(b.get('bad', ''))}</code></li>"
+        "<tr>"
+        f"<td>{_esc(b.get('ts', ''))}</td>"
+        f"<td>{_short(str(b.get('good', '')))}</td>"
+        f"<td>{_short(str(b.get('bad', '')))}</td>"
+        "</tr>"
         for b in bounds
     )
     return (
         "<section><h2>Bisect timeline</h2>"
-        f"<ul class='timeline'>{items}</ul>"
-        + (f"<h3>Boundary updates</h3><ul>{steps}</ul>" if steps else "")
+        f"{body}"
+        + (
+            "<h3>Boundary updates</h3><table class='grid'>"
+            "<tr><th>When</th><th>Good</th><th>Bad</th></tr>"
+            f"{steps}</table>"
+            if steps
+            else ""
+        )
         + "</section>"
     )
 
@@ -283,7 +381,7 @@ def _chart(events: list[dict[str, Any]]) -> str:
         if e.get("type") != "trial_result":
             continue
         m, lo, hi = _throughput(e)
-        labels.append(str(e.get("sha") or e.get("commit") or "?"))
+        labels.append(str(e.get("sha") or e.get("commit") or "?")[:8])
         means.append(m)
         los.append(lo if lo is not None else m)
         his.append(hi if hi is not None else m)
@@ -326,7 +424,7 @@ def _agent_panel(events: list[dict[str, Any]]) -> str:
         + "</td><td><code>"
         + _esc(json.dumps(c.get("proposal", {}), default=str))
         + "</code></td><td>"
-        + ("accepted" if c.get("accepted", True) else "rejected")
+        + _pill("accepted" if c.get("accepted", True) else "rejected")
         + "</td><td>"
         + _esc(c.get("why", c.get("reason", "")))
         + "</td><td><code>"
@@ -335,7 +433,10 @@ def _agent_panel(events: list[dict[str, Any]]) -> str:
         for c in calls
     )
     return (
-        "<section><h2>Agent proposals</h2><table>"
+        "<section><h2>Agent proposals</h2>"
+        "<p class='v-cap'>The brain proposes, the interval disposes. "
+        "Every row is one validated call.</p>"
+        "<table class='grid'>"
         "<tr><th>Decision</th><th>Proposal</th><th>Status</th>"
         "<th>Why</th><th>Fallback</th></tr>"
         f"{rows}</table></section>"
@@ -411,15 +512,19 @@ def _tune(events: list[dict[str, Any]]) -> str:
     wcfg = winner.get("config", {}) if winner else best_cfg
     uplift = f" (uplift {_esc(_interval(winner))})" if winner else ""
     if confirmed and wcfg and model:
-        cmd_txt = f"<p>Run it: <code>{_esc(serve_command(model, wcfg))}</code></p>"
+        cmd_txt = (
+            "<div class='banner win'><b>Winner kept.</b> "
+            f"Run it: <code>{_esc(serve_command(model, wcfg))}</code></div>"
+        )
     elif confirmed and wcfg:
         cmd_txt = (
-            f"<p>Winner: <code>{_esc(json.dumps(wcfg, default=str))}</code>{uplift}</p>"
+            "<div class='banner win'><b>Winner:</b> "
+            f"<code>{_esc(json.dumps(wcfg, default=str))}</code>{uplift}</div>"
         )
     else:
         cmd_txt = (
-            "<p>Baseline kept: no candidate cleared the uplift bar, "
-            "so the baseline stays.</p>"
+            "<div class='banner keep'><b>Baseline kept:</b> no candidate "
+            "cleared the uplift bar, so the baseline stays.</div>"
         )
 
     def _qual(q: dict[str, Any]) -> str:
@@ -445,17 +550,22 @@ def _tune(events: list[dict[str, Any]]) -> str:
     quals_txt = "".join(_qual(q) for q in quals)
     if wcfg:
         outcome_txt = (
-            f"<p>Winner: <code>{_esc(json.dumps(wcfg, default=str))}</code>{uplift}</p>"
+            f"<p><b>Best config:</b> "
+            f"<code>{_esc(json.dumps(wcfg, default=str))}</code>{uplift}</p>"
         )
     else:
         outcome_txt = ""
     return (
-        "<section><h2>TuneSmith</h2><table>"
+        "<section><h2>TuneSmith</h2><table class='grid'>"
         "<tr><th>Candidate</th><th>Outcome</th><th>Effect + interval</th>"
         "<th>Why tried</th></tr>"
         f"{rows}</table>"
         f"{outcome_txt}{cmd_txt}"
-        + (f"<h3>Quality guard</h3><ul>{quals_txt}</ul>" if quals_txt else "")
+        + (
+            f"<h3>Quality guard</h3><ul class='quals'>{quals_txt}</ul>"
+            if quals_txt
+            else ""
+        )
         + "</section>"
     )
 
@@ -485,22 +595,72 @@ def _repro(events: list[dict[str, Any]]) -> str:
     rows = "".join(_cell(k) for k in keys if start.get(k) is not None)
     status = _esc(end.get("status", end.get("result", "")) if end else "running")
     return (
-        "<section><h2>Reproducibility</h2><table>"
+        "<section><h2>Reproducibility</h2><div class='card'>"
+        "<table class='facts'>"
         f"{rows}<tr><td>run status</td><td><code>{status}</code></td></tr>"
-        "</table></section>"
+        "</table></div></section>"
     )
 
 
 CSS = (
-    "body{font-family:system-ui,sans-serif;max-width:900px}"
-    "body{margin:2rem auto;padding:0 1rem}"
-    ".card{border:1px solid #ccc;border-radius:8px}"
-    ".card{padding:1rem;background:#fafafa}"
-    ".timeline li{margin:.25rem 0}"
-    ".good{color:#1a7f37}.bad{color:#d1242f}"
-    ".skipped{color:#8250df}.ambiguous{color:#9a6700}"
-    "table{border-collapse:collapse;width:100%}"
-    "td,th{border:1px solid #ddd;padding:.4rem}"
+    ":root{--bench:#F7F7F2;--panel:#fff;--sunken:#F2F2EC;--ink:#292929;"
+    "--graphite:#72726E;--rule:#E3E3DE;--olive:#5B6F00;--olive-deep:#4C5616;"
+    "--lime:#B2C248;--tint:#F2F6E1;--red:#B3261E;--ochre:#B26A00;--teal:#0F766E;}"
+    "body{font-family:'IBM Plex Sans',-apple-system,'Segoe UI',Helvetica,"
+    "Arial,sans-serif;"
+    "background:var(--bench);color:var(--ink);max-width:960px;"
+    "margin:0 auto;padding:2rem 1.25rem 4rem;line-height:1.55;"
+    "-webkit-font-smoothing:antialiased}"
+    "h1{font-family:'Instrument Serif',Georgia,serif;font-weight:400;"
+    "font-size:2rem;margin:0 0 .2rem;letter-spacing:-.01em}"
+    ".runsub{color:var(--graphite);font-size:.9rem;margin:0 0 1.6rem}"
+    "h2{font-family:'Instrument Serif',Georgia,serif;font-weight:400;"
+    "font-size:1.5rem;margin:0 0 .8rem}"
+    "section{margin:0 0 1.5rem}"
+    "code{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;font-size:.85em;"
+    "background:var(--sunken);border:1px solid var(--rule);border-radius:4px;"
+    "padding:.05rem .35rem;word-break:break-all}"
+    ".card{background:var(--panel);border:1px solid var(--rule);border-radius:10px;"
+    "padding:1.2rem 1.3rem}"
+    ".pill{display:inline-block;font-size:.75rem;font-weight:600;border-radius:999px;"
+    "padding:.15rem .65rem;vertical-align:middle;white-space:nowrap}"
+    ".p-good{background:#E5F2E5;color:#1a7f37}.p-bad{background:#FBE7E5;color:var(--red)}"
+    ".p-skip{background:#E0F2F1;color:var(--teal)}.p-amb{background:#FBF0D9;color:var(--ochre)}"
+    ".p-neutral{background:var(--sunken);color:var(--ink)}"
+    ".v-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;align-items:start}"
+    ".v-num{font-family:'Instrument Serif',Georgia,serif;font-size:3rem;line-height:1;"
+    "margin:.2rem 0 .4rem}"
+    ".v-num.neg{color:var(--red)}.v-num.pos{color:var(--olive-deep)}"
+    ".v-cap{color:var(--graphite);font-size:.85rem}"
+    ".facts{width:100%;border-collapse:collapse;font-size:.9rem}"
+    ".facts td{padding:.35rem 0;border-bottom:1px solid var(--rule);vertical-align:top}"
+    ".facts tr:last-child td{border-bottom:none}"
+    ".facts td:first-child{color:var(--graphite);width:7.5rem}"
+    ".ibar{position:relative;height:.55rem;background:var(--sunken);border-radius:4px;"
+    "margin:1rem 0 .3rem}"
+    ".ibar .rng{position:absolute;top:0;bottom:0;background:var(--lime);"
+    "border-radius:4px}"
+    ".ibar .mk{position:absolute;top:-3px;width:3px;"
+    "height:calc(.55rem + 6px);background:var(--ink)}"
+    ".ibar .zero{position:absolute;top:-3px;width:1px;"
+    "height:calc(.55rem + 6px);background:#B9B9B2}"
+    ".iscale{display:flex;justify-content:space-between;font-size:.75rem;color:var(--graphite);"
+    "font-family:'IBM Plex Mono',monospace}"
+    "table.grid{width:100%;border-collapse:collapse;font-size:.87rem;background:var(--panel);"
+    "border:1px solid var(--rule);border-radius:10px;overflow:hidden}"
+    "table.grid th,table.grid td{text-align:left;padding:.5rem .7rem;"
+    "border-bottom:1px solid var(--rule);"
+    "vertical-align:top}"
+    "table.grid th{background:var(--sunken);font-size:.75rem;font-weight:600}"
+    "table.grid tr:last-child td{border-bottom:none}"
+    ".sha{white-space:nowrap}"
+    ".banner{border-radius:10px;padding:.9rem 1.1rem;margin:.9rem 0;font-size:.92rem}"
+    ".banner.keep{background:var(--tint);border:1px solid var(--lime)}"
+    ".banner.win{background:#E5F2E5;border:1px solid #1a7f37}"
+    "canvas#tput{max-height:300px}"
+    "ul.quals{margin:.5rem 0;padding-left:1.2rem;font-size:.88rem}"
+    "ul.quals li{margin:.2rem 0}"
+    "@media(max-width:640px){.v-grid{grid-template-columns:1fr}.v-num{font-size:2.4rem}}"
 )
 
 
@@ -519,6 +679,11 @@ def render_report(events_path: str | Path, live: bool = False) -> str:
         (str(e.get("run_id", "")) for e in events if e.get("run_id")),
         Path(events_path).parent.name,
     )
+    start = next((e for e in events if e.get("type") == "run_start"), {})
+    mode = str(start.get("mode", ""))
+    sub = f"mode {mode} · " if mode else ""
+    sub += f"{len([e for e in events if e.get('type') == 'trial_result'])} trials · "
+    sub += "re-rendered offline, no GPU needed"
     refresh = "<meta http-equiv='refresh' content='5'>" if live else ""
     types = {e.get("type") for e in events}
     has_bisect = bool(
@@ -542,7 +707,8 @@ def render_report(events_path: str | Path, live: bool = False) -> str:
         f"<title>PerfPilot report — {_esc(run_id)}</title>{refresh}"
         f"<style>{CSS}</style>"
         f"<script src='{CHARTJS_CDN}'></script></head>"
-        f"<body><h1>PerfPilot report — {_esc(run_id)}</h1>{body}</body></html>"
+        f"<body><h1>PerfPilot report — {_esc(run_id)}</h1>"
+        f"<p class='runsub'>{_esc(sub)}</p>{body}</body></html>"
     )
 
 
