@@ -216,7 +216,7 @@ const marker = (id, color) => (
 /* ---------- navigation ---------- */
 const SECTIONS = [
   ["planes", "Planes"], ["modules", "Modules"], ["bisect", "Bisect"],
-  ["tune", "TuneSmith"], ["decisions", "Decisions"], ["status", "Status"],
+  ["tune", "TuneSmith"], ["agent", "Agentic loop"], ["decisions", "Decisions"], ["status", "Status"],
 ];
 
 function Rail({ active }) {
@@ -530,7 +530,76 @@ const TUNE_STEPS = [
   ["Confirm or keep baseline", "The best config is re-measured at max_runs against baseline. A confirmed uplift ships with a paste-ready serve command; anything else keeps the baseline and says so."],
 ];
 
-/* ---------- 05 · decisions ---------- */
+/* ---------- 05 · agentic loop ----------
+   Scratchpad-style pipeline: role-colored nodes, animated dots on the
+   proposal path, dashed edges for the fallback path. */
+const AGENT_NODES = [
+  { id: "drv", x: 20, y: 110, w: 150, h: 92, tone: "blue", title: "Driver asks",
+    lines: ["pick · extra runs", "rank · propose"],
+    desc: "The driver loop (cli.py, modes/) turns each decision point into a compact prompt: commit table, history, knob space. It never asks for numbers, only choices." },
+  { id: "brn", x: 240, y: 110, w: 180, h: 92, tone: "teal", title: "Brain proposes",
+    lines: ["muse-spark-open", "Baseten · validated JSON"],
+    desc: "The Baseten brain returns one typed proposal per call: a SHA, a run count, a knob order, a one-knob change, or a culprit explanation. One retry on schema failure." },
+  { id: "val", x: 490, y: 110, w: 180, h: 92, tone: "amber", title: "Validators gate",
+    lines: ["range · schema · tried", "cited paths only"],
+    desc: "AgentOrchestrator checks every proposal: SHA inside the open range, knob/value type-strict equality, never already tried, explanation files cited from the real diff. Any miss is a logged rejection." },
+  { id: "st", x: 740, y: 110, w: 170, h: 92, tone: "green", title: "Stats disposes",
+    lines: ["log-ratio Welch", "+2% bar · 3% floor"],
+    desc: "Benchmarks have the final word. TuneSmith accepts only above +2% uplift; bisect confirms only below -3%. The interval in the report is this computation, not the brain's opinion." },
+  { id: "ev", x: 740, y: 262, w: 170, h: 70, tone: "slate", title: "agent_call log",
+    lines: ["proposal · accepted · why"],
+    desc: "Accepted and rejected calls land in agent-events.jsonl with the proposal, the verdict, and the fallback used. The report's agent panel reads this file; it powers the video." },
+];
+const AGENT_TAGS = [
+  [95, 96, "asks"], [330, 96, "proposes"], [580, 96, "validates"],
+  [825, 96, "disposes"], [798, 250, "logs"],
+];
+
+function AgentLoop() {
+  const [hover, setHover] = useState(null);
+  return (
+    <figure>
+      <div className="svgwrap">
+        <svg viewBox="0 0 960 368" role="img" aria-label="Agentic loop: driver asks, brain proposes, validators gate, stats dispose, calls are logged, fallbacks catch every miss">
+          <defs>
+            {marker("ga", "#72726E")}
+            <path id="pa1" d="M 170 156 L 240 156" />
+            <path id="pa2" d="M 420 156 L 490 156" />
+            <path id="pa3" d="M 670 156 L 740 156" />
+            <path id="pa4" d="M 825 202 L 825 262" />
+            <path id="pa5" d="M 580 202 L 580 262" />
+            <path id="pa6" d="M 670 297 L 740 297" />
+          </defs>
+          <use href="#pa1" fill="none" stroke="#72726E" strokeWidth="1.4" markerEnd="url(#ga)" />
+          <use href="#pa2" fill="none" stroke="#72726E" strokeWidth="1.4" markerEnd="url(#ga)" />
+          <use href="#pa3" fill="none" stroke="#72726E" strokeWidth="1.4" markerEnd="url(#ga)" />
+          <use href="#pa4" fill="none" stroke="#72726E" strokeWidth="1.4" markerEnd="url(#ga)" />
+          <use href="#pa5" fill="none" stroke="#9aa0bc" strokeWidth="1.4" strokeDasharray="5,4" markerEnd="url(#ga)" />
+          <use href="#pa6" fill="none" stroke="#9aa0bc" strokeWidth="1.4" strokeDasharray="5,4" markerEnd="url(#ga)" />
+          <circle r="4" fill="#5B6F00"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0s"><mpath href="#pa1" /></animateMotion></circle>
+          <circle r="4" fill="#5B6F00"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0.3s"><mpath href="#pa2" /></animateMotion></circle>
+          <circle r="4" fill="#5B6F00"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0.6s"><mpath href="#pa3" /></animateMotion></circle>
+          <circle r="4" fill="#5B6F00"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0.9s"><mpath href="#pa4" /></animateMotion></circle>
+          {AGENT_NODES.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
+          <g tabIndex={0} onMouseEnter={() => setHover({title: "Fallback", desc: "Deterministic and always valid: middle commit, 2 extra runs, config-order knobs, next untried config, no explanation. Used when no key is set, a call fails twice, or a proposal is rejected."})} onMouseLeave={() => setHover(null)} onFocus={() => setHover({title: "Fallback"})} onBlur={() => setHover(null)}>
+            <rect x="490" y="262" width="180" height="70" rx="6" fill="#FFFFFF" stroke="#72726E" strokeWidth="1.4" strokeDasharray="5,4" />
+            <text x="580" y="290" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="IBM Plex Sans, sans-serif" fill="#292929">Fallback</text>
+            <text x="580" y="307" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">middle · 2 runs · next</text>
+          </g>
+          {AGENT_TAGS.map(([x, y, t], i) => (
+            <text key={i} x={x} y={y} textAnchor="middle" fontSize="10" fontFamily="IBM Plex Mono, monospace" fill="#72726E">{t}</text>
+          ))}
+          <text x="480" y="352" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">solid = proposal path · dashed = fallback (no key · failed call · rejected)</text>
+        </svg>
+      </div>
+      <Key items={[["blue", "ask"], ["teal", "propose"], ["amber", "gate"], ["green", "dispose"], ["slate", "log"]]} />
+      <Readout node={hover} />
+      <figcaption>The proposal path carries choices; numbers only ever flow back from GPU trials. The dashed path is why a run completes with no key, no network, or a stubborn brain.</figcaption>
+    </figure>
+  );
+}
+
+/* ---------- 06 · decisions ---------- */
 const DECISIONS = [
   ["The brain decides, never measures.", "Every number comes from a GPU trial. The LLM proposes commits, extra-run counts, knob order and one-knob changes. Each answer is schema-validated and range-checked, with a deterministic fallback logged as an agent_call event."],
   ["Same GPU, every time.", "A pinned A100-40GB and one warm container (max_containers=1) for the whole run. The GPU UUID is re-checked on every trial, so a change is an error, never a comparison. Warmup runs before measured runs."],
@@ -576,7 +645,7 @@ function App() {
           <p>An agent for vLLM performance. PerfBisect locates the first slow commit. TuneSmith recovers speed
           through serve flags. Every verdict rests on a measured interval, and the brain only proposes.</p>
           <dl className="facts">
-            <div><dt>Tests</dt><dd>184 passing</dd></div>
+            <div><dt>Tests</dt><dd>185 passing</dd></div>
             <div><dt>Metered GPU</dt><dd>A100-40GB, $2.10/h</dd></div>
             <div><dt>Local logic</dt><dd>$0, no GPU</dd></div>
             <div><dt>Advisor</dt><dd>muse-spark-open on Baseten</dd></div>
@@ -609,6 +678,12 @@ function App() {
               <li key={h}><div><b>{h}</b><span>{p}</span></div></li>
             ))}
           </ol>
+        </section>
+
+        <section id="agent">
+          <h2>Agentic loop</h2>
+          <p className="intro">The brain proposes, the interval disposes. Every call is validated, and every miss lands on a logged deterministic fallback.</p>
+          <AgentLoop />
         </section>
 
         <section id="decisions">

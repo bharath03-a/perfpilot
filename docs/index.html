@@ -47,8 +47,8 @@ perfpilot demo runs/&lt;run-id&gt;</pre>
   <div class="stats" role="list">
     <div class="stat" role="listitem"><b>0</b><span>wrong verdicts on real A100 runs</span></div>
     <div class="stat" role="listitem"><b>90%</b><span>Welch log-ratio interval on every claim</span></div>
-    <div class="stat" role="listitem"><b>$6.23</b><span>total metered GPU spend, stated per run</span></div>
-    <div class="stat" role="listitem"><b>184</b><span>pytest tests green, ruff clean</span></div>
+    <div class="stat" role="listitem"><b>$7.46</b><span>total metered GPU spend, stated per run</span></div>
+    <div class="stat" role="listitem"><b>185</b><span>pytest tests green, ruff clean</span></div>
   </div>
 
   <section class="block" id="how">
@@ -81,11 +81,12 @@ perfpilot demo runs/&lt;run-id&gt;</pre>
       <img src="assets/cliff.svg" alt="Per-run throughput in m2-eval-9: clean baseline near 3590, one collapsed run at 1703, injected commits near 1190" style="width:100%;height:auto;display:block">
     </figure>
     <p class="report-meta">Every measured run of m2-eval-9, in order. The red point is the collapsed run that poisoned the baseline — caught, fixed, and regression-tested (<code>baseline_max_spread</code>).</p>
-    <h3>GPU eval · Modal A100-40GB · $4.63</h3>
+    <h3>GPU eval · Modal A100-40GB · $5.86</h3>
     <table class="data">
       <tr><th>Trial</th><th>Planted</th><th>Verdict</th><th>Reading</th></tr>
       <tr><td>m2-eval-9</td><td>strong overlay, commit 1 of 16</td><td>15-wide range, culprit inside, unverified</td><td>Correct by inclusion. One collapsed baseline run ([3569, 3594, 1703] tok/s) poisoned variance → fixed with endpoint re-measure, regression-tested.</td></tr>
       <tr><td>m2-eval-10</td><td>mild overlay, last commit</td><td><code>no_regression</code></td><td>Correct: the overlay measured −0.8%, so there was no regression to find. Overlay dropped per the ≥10% keep rule.</td></tr>
+      <tr><td>m2-eval-11</td><td>strong overlay, commit 1 of 16 (fixed driver)</td><td>2-wide range, culprit inside, unverified</td><td>Same config as trial 0: converged in 11 probes at $1.23 — the baseline fix validated on a real A100.</td></tr>
     </table>
     <br>
     <h3>Tune · $1.60 · honest negative</h3>
@@ -101,6 +102,7 @@ perfpilot demo runs/&lt;run-id&gt;</pre>
     <div class="tabs" role="tablist" aria-label="Recorded runs">
       <button role="tab" aria-selected="true" data-run="m2-eval-9">m2-eval-9 · bisect</button>
       <button role="tab" aria-selected="false" data-run="m2-eval-10">m2-eval-10 · bisect</button>
+      <button role="tab" aria-selected="false" data-run="m2-eval-11">m2-eval-11 · bisect</button>
       <button role="tab" aria-selected="false" data-run="tune-20261101-150900">tune · flags</button>
     </div>
     <div class="report-frame">
@@ -147,6 +149,7 @@ perfpilot demo runs/&lt;run-id&gt;</pre>
   var META = {
     "m2-eval-9": "26 probes · culprit e5196e29 · regression −60.1% (derived) · unverified · $3.32 — <a href=\"runs/m2-eval-9/report.html\">open full page</a> · <a href=\"runs/m2-eval-9/events.jsonl\">events.jsonl</a>",
     "m2-eval-10": "correct no_regression · mild overlay measured −0.8% · $1.31 — <a href=\"runs/m2-eval-10/report.html\">open full page</a> · <a href=\"runs/m2-eval-10/events.jsonl\">events.jsonl</a>",
+    "m2-eval-11": "2-wide range, culprit inside · 11 probes · $1.23 · baseline fix validated — <a href=\"runs/m2-eval-11/report.html\">open full page</a> · <a href=\"runs/m2-eval-11/events.jsonl\">events.jsonl</a>",
     "tune-20261101-150900": "6 candidates · baseline kept · quality held · ~$1.60 — <a href=\"runs/tune-20261101-150900/report.html\">open full page</a> · <a href=\"runs/tune-20261101-150900/events.jsonl\">events.jsonl</a>"
   };
   var view = document.getElementById("report-view");
