@@ -372,6 +372,7 @@ def drive_tune_live(
         knob_space,
         measure,
         quality,
+        model=model,
         params=params or TuneParams(),
         propose=propose,
     )

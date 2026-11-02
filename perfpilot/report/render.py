@@ -418,11 +418,17 @@ def _agent_panel(events: list[dict[str, Any]]) -> str:
             fb = json.dumps(fb, default=str)
         return _esc(fb)
 
+    def _proposal(c: dict[str, Any]) -> str:
+        proposal = c.get("proposal", {})
+        if isinstance(proposal, dict):
+            proposal = {k: v for k, v in proposal.items() if k != "reason"}
+        return _esc(json.dumps(proposal, default=str))
+
     rows = "".join(
         "<tr><td>"
         + _esc(c.get("decision", ""))
         + "</td><td><code>"
-        + _esc(json.dumps(c.get("proposal", {}), default=str))
+        + _proposal(c)
         + "</code></td><td>"
         + _pill("accepted" if c.get("accepted", True) else "rejected")
         + "</td><td>"
@@ -682,7 +688,12 @@ def render_report(events_path: str | Path, live: bool = False) -> str:
     start = next((e for e in events if e.get("type") == "run_start"), {})
     mode = str(start.get("mode", ""))
     sub = f"mode {mode} · " if mode else ""
-    sub += f"{len([e for e in events if e.get('type') == 'trial_result'])} trials · "
+    n_trials = len([e for e in events if e.get("type") == "trial_result"])
+    n_cands = len([e for e in events if e.get("type") == "tune_candidate"])
+    if n_trials:
+        sub += f"{n_trials} trials · "
+    elif n_cands:
+        sub += f"{n_cands} candidates · "
     sub += "re-rendered offline, no GPU needed"
     refresh = "<meta http-equiv='refresh' content='5'>" if live else ""
     types = {e.get("type") for e in events}

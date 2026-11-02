@@ -153,9 +153,12 @@ def test_tune_live_completes_without_brain(tmp_path) -> None:
         lambda config: 80.0,
         run_id="no-brain-tune",
         runs_root=str(tmp_path),
+        model="glimmer",
     )
     assert out["best"]["max_num_seqs"] == 256
     assert "vllm serve" in out["serve_command"]
+    assert "glimmer" in out["serve_command"]
+    assert "<model>" not in out["serve_command"]
     assert (tmp_path / "no-brain-tune" / "report.html").exists()
 
 
