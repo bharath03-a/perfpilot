@@ -65,6 +65,17 @@
              font-size:.92rem; }
   .readout .none { color:var(--graphite); }
   figcaption { font-size:.88rem; color:var(--graphite); margin-top:.9rem; max-width:72ch; }
+  .trace { margin-top:1.2rem; }
+  .tracecap { font-size:.88rem; color:var(--graphite); max-width:70ch; }
+  .tracecap code { font-family:"IBM Plex Mono",monospace; font-size:.82em; }
+  .chips { display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.6rem; }
+  .chip { font-size:.8rem; border:1px solid var(--rule); border-radius:999px;
+          padding:.3rem .75rem; background:var(--panel); }
+  .chip b { font-weight:600; margin-right:.25rem; }
+  .chip.ok b { color:var(--green); }
+  .chip.no { border-color:var(--red); }
+  .chip.no b { color:var(--red); }
+  .chip.more { border-style:dashed; color:var(--graphite); }
 
   .node { cursor:default; }
   .node .body { transition:opacity .15s ease; }
@@ -581,6 +592,12 @@ function AgentLoop() {
           <circle r="4" fill="#5B6F00"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0.6s"><mpath href="#pa3" /></animateMotion></circle>
           <circle r="4" fill="#5B6F00"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0.9s"><mpath href="#pa4" /></animateMotion></circle>
           {AGENT_NODES.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
+          {AGENT_NODES.map((n, i) => (
+            <g key={"b" + n.id}>
+              <circle cx={n.x} cy={n.y} r="11" fill="#292929" />
+              <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize="11" fontWeight="600" fontFamily="IBM Plex Sans, sans-serif" fill="#F7F7F2">{i + 1}</text>
+            </g>
+          ))}
           <g tabIndex={0} onMouseEnter={() => setHover({title: "Fallback", desc: "Deterministic and always valid: middle commit, 2 extra runs, config-order knobs, next untried config, no explanation. Used when no key is set, a call fails twice, or a proposal is rejected."})} onMouseLeave={() => setHover(null)} onFocus={() => setHover({title: "Fallback"})} onBlur={() => setHover(null)}>
             <rect x="490" y="262" width="180" height="70" rx="6" fill="#FFFFFF" stroke="#72726E" strokeWidth="1.4" strokeDasharray="5,4" />
             <text x="580" y="290" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="IBM Plex Sans, sans-serif" fill="#292929">Fallback</text>
@@ -595,7 +612,35 @@ function AgentLoop() {
       <Key items={[["blue", "ask"], ["teal", "propose"], ["amber", "gate"], ["green", "dispose"], ["slate", "log"]]} />
       <Readout node={hover} />
       <figcaption>The proposal path carries choices; numbers only ever flow back from GPU trials. The dashed path is why a run completes with no key, no network, or a stubborn brain.</figcaption>
+      <TraceStrip />
     </figure>
+  );
+}
+
+const TRACE = [
+  ["rank_knobs", "max_num_seqs first", true],
+  ["propose", "max_num_seqs = 128", true],
+  ["propose", "prefix_caching = on", true],
+  ["propose", "max_num_seqs = 256", true],
+  ["propose", "max_num_seqs = 64", true],
+  ["propose", "prefix_caching = off", true],
+  ["propose", "duplicate", false],
+  ["rank_knobs", "same order again", true],
+];
+
+function TraceStrip() {
+  return (
+    <div className="trace">
+      <p className="tracecap">One real Tuesday: 16 calls from <code>runs/evidence-tune</code>, every one validated. The brain ranked, swept, re-ranked — the interval kept 256.</p>
+      <div className="chips">
+        {TRACE.map(([kind, what, ok], i) => (
+          <span key={i} className={"chip " + (ok ? "ok" : "no")} title={ok ? "accepted" : "rejected: already tried"}>
+            <b>{i + 1}</b> {kind} · {what} {ok ? "✓" : "✗"}
+          </span>
+        ))}
+        <span className="chip more" title="8 more calls in agent-events.jsonl">+ 8 more</span>
+      </div>
+    </div>
   );
 }
 
