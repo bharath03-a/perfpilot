@@ -201,9 +201,10 @@
     }).join("");
     root.innerHTML = '<div class="table-scroll"><table class="data"><tr><th>Recorded</th><th>Commit</th>' +
       "<th>Single agent: measurements (correct)</th><th>Swarm: measurements (correct)</th></tr>" + rows +
-      '</table></div><p class="note">Live Baseten model, 7 core scenarios, 1 seed each. The first live run showed the swarm ' +
-      "losing (11.6 vs 9.4): the model gave ungrounded high-confidence votes. Confidence is now checked against the commit " +
-      "message, and the statistician runs deterministically.</p>";
+      '</table></div><p class="note">Live Baseten model on the 7 core scenarios. The latest row uses 3 seeds: the swarm ' +
+      "is 40% cheaper when a commit message points at the culprit (6 vs 10 measurements) but costs more on noisy and " +
+      "outlier scenarios, so overall it is close to a single agent (9.7 vs 9.2). Earlier 1-seed rows are too small to rank: " +
+      "one noisy seed takes 35 measurements even for plain bisect. Neither variant gave a wrong verdict.</p>";
   }
 
   const FIX_CORRECT = [

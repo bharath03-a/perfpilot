@@ -133,6 +133,18 @@ Failures the harness surfaced, each fixed test-first with replayed evidence:
 | hint_spam (every msg says "kernel") | swarm 20.3 probes | 9.1 | code_reader abstains when >25% of the open range matches — a hint must discriminate |
 | code_hint | 9.0 probes | **6.0 (swarm)** | code_reader + statistician confirm-parent combo |
 
+Live Baseten model (`--live-brain`, 7 core scenarios × 3 seeds):
+
+| Variant | Correct | Wrong | Probes/run | code_hint | noisy |
+|---|---|---|---|---|---|
+| single agent | 100% | 0 | 9.19 | 10.0 | 13.3 |
+| swarm | 100% | 0 | 9.71 | **6.0** | 19.0 |
+
+The live swarm wins big where a message points at the culprit and loses on
+noise, so overall it is roughly even with one agent. The first live run
+exposed ungrounded high-confidence votes; confidence is now checked
+against the commit message and the statistician is deterministic.
+
 Known limits, stated: a misleading hint costs ~1 probe (never a verdict);
 5% regressions under 1.5% noise need ~17 probes; scripted roles are
 heuristics — only `--live-brain` scores the real model.

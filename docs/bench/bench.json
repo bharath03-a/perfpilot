@@ -825,6 +825,60 @@
      "score": 76.86
     }
    }
+  },
+  {
+   "ts": "2026-11-03T06:38:13+00:00",
+   "git_sha": "10d824fae3297eb63a3b561b596bfd610f706f4b",
+   "mode": "live",
+   "variants": {
+    "single": {
+     "variant": "single",
+     "n": 7,
+     "correct_rate": 1.0,
+     "exact_rate": 1.0,
+     "wrong": 0,
+     "mean_probes": 8.71,
+     "mean_cost_usd": 1.77,
+     "score": 82.57
+    },
+    "swarm": {
+     "variant": "swarm",
+     "n": 7,
+     "correct_rate": 1.0,
+     "exact_rate": 0.857,
+     "wrong": 0,
+     "mean_probes": 11.43,
+     "mean_cost_usd": 2.15,
+     "score": 77.14
+    }
+   }
+  },
+  {
+   "ts": "2026-11-03T06:50:40+00:00",
+   "git_sha": "f86eaa22f8eef1030e896c285d26acf64887ac13",
+   "mode": "live",
+   "variants": {
+    "single": {
+     "variant": "single",
+     "n": 21,
+     "correct_rate": 1.0,
+     "exact_rate": 1.0,
+     "wrong": 0,
+     "mean_probes": 9.19,
+     "mean_cost_usd": 1.855,
+     "score": 81.62
+    },
+    "swarm": {
+     "variant": "swarm",
+     "n": 21,
+     "correct_rate": 1.0,
+     "exact_rate": 0.952,
+     "wrong": 0,
+     "mean_probes": 9.71,
+     "mean_cost_usd": 1.925,
+     "score": 80.57
+    }
+   }
   }
  ]
 }
