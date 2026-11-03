@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PerfPilot — Architecture</title>
-<meta name="theme-color" content="#F7F7F2">
+<meta name="theme-color" content="#EEF1F4">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -67,7 +67,7 @@
   figcaption { font-size:.88rem; color:var(--graphite); margin-top:.9rem; max-width:72ch; }
   .trace { margin-top:1.2rem; }
   .tracecap { font-size:.88rem; color:var(--graphite); max-width:70ch; }
-  .tracecap code { font-family:"IBM Plex Mono",monospace; font-size:.82em; }
+  .tracecap code { font-family:"JetBrains Mono",monospace; font-size:.82em; }
   .chips { display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.6rem; }
   .chip { font-size:.8rem; border:1px solid var(--rule); border-radius:999px;
           padding:.3rem .75rem; background:var(--panel); }
@@ -183,10 +183,10 @@ function Node({ n, active, onHover }) {
       <rect className="body" x={n.x} y={n.y} width={n.w} height={n.h} rx="6"
             fill={n.solid ? t.stroke : t.fill} stroke={t.stroke} strokeWidth={n.solid ? 0 : 1.4} />
       <text x={cx} y={n.y + 22} textAnchor="middle" fontSize="13" fontWeight="500"
-            fontFamily="Schibsted Grotesk, sans-serif" fill={n.solid ? "#fff" : "#292929"}>{n.title}</text>
+            fontFamily="Schibsted Grotesk, sans-serif" fill={n.solid ? "#fff" : "#16202B"}>{n.title}</text>
       {(n.lines || []).map((L, i) => (
         <text key={i} x={cx} y={n.y + 39 + i * 15} textAnchor="middle" fontSize="10.5"
-              fontFamily="JetBrains Mono, monospace" fill={n.solid ? "#F2F2EC" : "#72726E"}>{L}</text>
+              fontFamily="JetBrains Mono, monospace" fill={n.solid ? "#F4F6F8" : "#5B6878"}>{L}</text>
       ))}
     </g>
   );
@@ -202,13 +202,13 @@ function Diamond({ n, active, onHover }) {
       <polygon className="body" points={`${cx},${n.y} ${n.x + n.w},${cy} ${cx},${n.y + n.h} ${n.x},${cy}`}
                fill={t.fill} stroke={t.stroke} strokeWidth="1.4" />
       <text x={cx} y={cy + 4} textAnchor="middle" fontSize="11.5" fontWeight="500"
-            fontFamily="Schibsted Grotesk, sans-serif" fill="#292929">{n.title}</text>
+            fontFamily="Schibsted Grotesk, sans-serif" fill="#16202B">{n.title}</text>
     </g>
   );
 }
 
 function Edge({ d, label, lx, ly, color, dashed, bold, id }) {
-  const c = color || "#72726E";
+  const c = color || "#5B6878";
   return (
     <g>
       <path d={d} fill="none" stroke={c} strokeWidth={bold ? 2 : 1.3}
@@ -222,7 +222,7 @@ function Edge({ d, label, lx, ly, color, dashed, bold, id }) {
 function Badge({ x, y, n }) {
   return (
     <g>
-      <circle cx={x} cy={y} r="10" fill="#292929" stroke="#FFFFFF" strokeWidth="1.5" />
+      <circle cx={x} cy={y} r="10" fill="#16202B" stroke="#FFFFFF" strokeWidth="1.5" />
       <text x={x} y={y + 3.8} textAnchor="middle" fontSize="10.5" fontWeight="500"
             fontFamily="JetBrains Mono, monospace" fill="#FFFFFF">{n}</text>
     </g>
@@ -300,9 +300,9 @@ function Planes() {
     <figure>
       <div className="svgwrap">
         <svg viewBox="0 0 960 440" role="img" aria-label="Control plane runs locally and decides. Measurement plane runs on Modal A100 and spends money.">
-          <defs>{marker("ha", "#72726E")}{marker("haR", "#C8323C")}</defs>
+          <defs>{marker("ha", "#5B6878")}{marker("haR", "#C8323C")}</defs>
           <text x="30" y="30" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#1F5FBF">control plane · local · $0</text>
-          <rect x="10" y="40" width="940" height="180" rx="6" fill="#F2F2EC" stroke="#1F5FBF" strokeWidth="1" />
+          <rect x="10" y="40" width="940" height="180" rx="6" fill="#F4F6F8" stroke="#1F5FBF" strokeWidth="1" />
           <text x="430" y="292" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#C8323C">measurement plane · Modal A100 · $2.10/h</text>
           <rect x="10" y="272" width="940" height="152" rx="6" fill="#FBF3F3" stroke="#C8323C" strokeWidth="1" />
           {HIGH_NODES.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
@@ -391,7 +391,7 @@ function Modules() {
     <figure>
       <div className="svgwrap">
         <svg viewBox="0 0 1000 760" role="img" aria-label="Module contracts from inputs through execution to evidence">
-          <defs>{marker("da", "#72726E")}</defs>
+          <defs>{marker("da", "#5B6878")}</defs>
           {DETAIL_ROWS.map(r => (
             <text key={r.label} x="10" y={r.boxes[0].y - 11} fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#1F5FBF">{r.label}</text>
           ))}
@@ -402,10 +402,10 @@ function Modules() {
           <Edge id="da" d="M700,354 L700,394" />
           <Edge id="da" color="#C8323C" d="M500,490 L500,526" label="run_trial · answer_batch $$$ → TrialResult" lx={590} ly={512} />
           <Edge id="da" d="M500,618 L500,636" label="events → render" lx={560} ly={630} />
-          <rect x="10" y="640" width="980" height="100" rx="6" fill="#F2F6E1" stroke="#5B6F00" strokeWidth="1.2" />
-          <text x="500" y="668" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="Schibsted Grotesk, sans-serif" fill="#292929">Evidence · runs/&lt;run-id&gt;/events.jsonl (14 event types) → render.py → report.html</text>
-          <text x="500" y="688" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#72726E">config.yaml · events.jsonl + agent-events.jsonl (merged) · results/&lt;sha&gt;__&lt;flags&gt;/ · logs/</text>
-          <text x="500" y="706" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#72726E">perfpilot report re-renders offline · watch adds a 5s auto-reload · demo replays a run event by event · partial runs render honestly</text>
+          <rect x="10" y="640" width="980" height="100" rx="6" fill="#E2F2EA" stroke="#1E7A52" strokeWidth="1.2" />
+          <text x="500" y="668" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="Schibsted Grotesk, sans-serif" fill="#16202B">Evidence · runs/&lt;run-id&gt;/events.jsonl (14 event types) → render.py → report.html</text>
+          <text x="500" y="688" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#5B6878">config.yaml · events.jsonl + agent-events.jsonl (merged) · results/&lt;sha&gt;__&lt;flags&gt;/ · logs/</text>
+          <text x="500" y="706" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#5B6878">perfpilot report re-renders offline · watch adds a 5s auto-reload · demo replays a run event by event · partial runs render honestly</text>
         </svg>
       </div>
       <Key items={[["slate", "inputs"], ["blue", "orchestrate"], ["teal", "brain"], ["green", "verdict"], ["red", "GPU spend"]]} />
@@ -492,23 +492,23 @@ const FLOW_EDGES = [
   { d: "M400,124 L400,144" },
   { d: "M400,196 L400,214" },
   { d: "M295,246 L240,246", label: "no", lx: 268, ly: 240, color: "#C8323C" },
-  { d: "M400,278 L400,300", label: "yes", lx: 418, ly: 292, color: "#5B6F00" },
+  { d: "M400,278 L400,300", label: "yes", lx: 418, ly: 292, color: "#1E7A52" },
   { d: "M295,332 L240,332", label: "no", lx: 268, ly: 326, color: "#C8323C" },
-  { d: "M400,364 L400,384", label: "yes", lx: 418, ly: 376, color: "#5B6F00" },
-  { d: "M295,416 L240,416", label: "no", lx: 268, ly: 410, color: "#72726E" },
-  { d: "M400,448 L400,470", label: "yes", lx: 418, ly: 460, color: "#5B6F00" },
+  { d: "M400,364 L400,384", label: "yes", lx: 418, ly: 376, color: "#1E7A52" },
+  { d: "M295,416 L240,416", label: "no", lx: 268, ly: 410, color: "#5B6878" },
+  { d: "M400,448 L400,470", label: "yes", lx: 418, ly: 460, color: "#1E7A52" },
   { d: "M400,518 L400,536" },
   { d: "M400,588 L400,608" },
   { d: "M505,640 L600,640", label: "no", lx: 552, ly: 634, color: "#C8323C" },
-  { d: "M400,672 L400,690", label: "yes", lx: 418, ly: 682, color: "#5B6F00" },
+  { d: "M400,672 L400,690", label: "yes", lx: 418, ly: 682, color: "#1E7A52" },
   { d: "M400,738 L400,758" },
   { d: "M505,790 L690,790", label: "yes", lx: 598, ly: 782, color: "#B26A00" },
-  { d: "M400,822 L400,848", label: "no", lx: 418, ly: 838, color: "#72726E" },
+  { d: "M400,822 L400,848", label: "no", lx: 418, ly: 838, color: "#5B6878" },
   { d: "M780,822 L780,862", label: "yes", lx: 798, ly: 846, color: "#B26A00" },
-  { d: "M870,790 L930,790 L930,964 L880,964", label: "no", lx: 904, ly: 784, color: "#72726E" },
+  { d: "M870,790 L930,790 L930,964 L880,964", label: "no", lx: 904, ly: 784, color: "#5B6878" },
   { d: "M400,896 L400,916" },
   { d: "M305,948 L240,948", label: "yes", lx: 272, ly: 940, color: "#B26A00" },
-  { d: "M400,980 L400,1012", label: "no", lx: 418, ly: 998, color: "#72726E" },
+  { d: "M400,980 L400,1012", label: "no", lx: 418, ly: 998, color: "#5B6878" },
   { d: "M135,436 L135,470" },
   { d: "M135,522 L135,546" },
   { d: "M135,594 L135,618" },
@@ -528,7 +528,7 @@ function Flowchart() {
     <figure>
       <div className="svgwrap">
         <svg viewBox="0 0 1000 1060" role="img" aria-label="Bisect flowchart for one run">
-          <defs>{marker("fa", "#292929")}</defs>
+          <defs>{marker("fa", "#16202B")}</defs>
           {FLOW_NODES.map(n => {
             if (n.kind === "diamond") return <Diamond key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />;
             if (n.kind === "term" || n.kind === "pill") return (
@@ -536,16 +536,16 @@ function Flowchart() {
                  onMouseEnter={() => setHover(n)} onMouseLeave={() => setHover(null)}
                  onFocus={() => setHover(n)} onBlur={() => setHover(null)}>
                 <rect className="body" x={n.x} y={n.y} width={n.w} height={n.h} rx={n.h / 2}
-                      fill={n.kind === "term" ? "#292929" : "#FFFFFF"} stroke="#292929" strokeWidth={n.kind === "term" ? 0 : 1.3} />
+                      fill={n.kind === "term" ? "#16202B" : "#FFFFFF"} stroke="#16202B" strokeWidth={n.kind === "term" ? 0 : 1.3} />
                 <text x={n.x + n.w / 2} y={n.y + n.h / 2 + 4} textAnchor="middle" fontSize="12.5" fontWeight="500"
-                      fontFamily="Schibsted Grotesk, sans-serif" fill={n.kind === "term" ? "#FFFFFF" : "#292929"}>{n.title}</text>
+                      fontFamily="Schibsted Grotesk, sans-serif" fill={n.kind === "term" ? "#FFFFFF" : "#16202B"}>{n.title}</text>
               </g>
             );
             return <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />;
           })}
           {FLOW_EDGES.map((e, i) => <Edge key={i} id="fa" {...e} />)}
           {FLOW_BADGES.map(([x, y, n], i) => <Badge key={i} x={x} y={y} n={n} />)}
-          <text x="960" y="1040" textAnchor="end" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#72726E">1 loop return · 2 same-SHA resample</text>
+          <text x="960" y="1040" textAnchor="end" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#5B6878">1 loop return · 2 same-SHA resample</text>
         </svg>
       </div>
       <Key items={[["red", "spends GPU"], ["amber", "bounded salvage"], ["green", "verdict or exit"], ["slate", "decision or label"], ["blue", "search step"]]} />
@@ -599,7 +599,7 @@ function AgentLoop() {
       <div className="svgwrap">
         <svg viewBox="0 0 960 368" role="img" aria-label="Agentic loop: driver asks, brain proposes, validators gate, stats dispose, calls are logged, fallbacks catch every miss">
           <defs>
-            {marker("ga", "#72726E")}
+            {marker("ga", "#5B6878")}
             <path id="pa1" d="M 170 156 L 240 156" />
             <path id="pa2" d="M 420 156 L 490 156" />
             <path id="pa3" d="M 670 156 L 740 156" />
@@ -607,10 +607,10 @@ function AgentLoop() {
             <path id="pa5" d="M 580 202 L 580 262" />
             <path id="pa6" d="M 670 297 L 740 297" />
           </defs>
-          <use href="#pa1" fill="none" stroke="#72726E" strokeWidth="1.4" markerEnd="url(#ga)" />
-          <use href="#pa2" fill="none" stroke="#72726E" strokeWidth="1.4" markerEnd="url(#ga)" />
-          <use href="#pa3" fill="none" stroke="#72726E" strokeWidth="1.4" markerEnd="url(#ga)" />
-          <use href="#pa4" fill="none" stroke="#72726E" strokeWidth="1.4" markerEnd="url(#ga)" />
+          <use href="#pa1" fill="none" stroke="#5B6878" strokeWidth="1.4" markerEnd="url(#ga)" />
+          <use href="#pa2" fill="none" stroke="#5B6878" strokeWidth="1.4" markerEnd="url(#ga)" />
+          <use href="#pa3" fill="none" stroke="#5B6878" strokeWidth="1.4" markerEnd="url(#ga)" />
+          <use href="#pa4" fill="none" stroke="#5B6878" strokeWidth="1.4" markerEnd="url(#ga)" />
           <use href="#pa5" fill="none" stroke="#9aa0bc" strokeWidth="1.4" strokeDasharray="5,4" markerEnd="url(#ga)" />
           <use href="#pa6" fill="none" stroke="#9aa0bc" strokeWidth="1.4" strokeDasharray="5,4" markerEnd="url(#ga)" />
           <circle r="4" fill="#1F5FBF"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0s"><mpath href="#pa1" /></animateMotion></circle>
@@ -620,19 +620,19 @@ function AgentLoop() {
           {AGENT_NODES.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
           {AGENT_NODES.map((n, i) => (
             <g key={"b" + n.id}>
-              <circle cx={n.x} cy={n.y} r="11" fill="#292929" />
-              <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize="11" fontWeight="600" fontFamily="Schibsted Grotesk, sans-serif" fill="#F7F7F2">{i + 1}</text>
+              <circle cx={n.x} cy={n.y} r="11" fill="#16202B" />
+              <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize="11" fontWeight="600" fontFamily="Schibsted Grotesk, sans-serif" fill="#EEF1F4">{i + 1}</text>
             </g>
           ))}
           <g tabIndex={0} onMouseEnter={() => setHover({title: "Fallback", desc: "Deterministic and always valid: middle commit, 2 extra runs, config-order knobs, next untried config, no explanation. Used when no key is set, a call fails twice, or a proposal is rejected."})} onMouseLeave={() => setHover(null)} onFocus={() => setHover({title: "Fallback"})} onBlur={() => setHover(null)}>
-            <rect x="490" y="262" width="180" height="70" rx="6" fill="#FFFFFF" stroke="#72726E" strokeWidth="1.4" strokeDasharray="5,4" />
-            <text x="580" y="290" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="Schibsted Grotesk, sans-serif" fill="#292929">Fallback</text>
-            <text x="580" y="307" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#72726E">middle · 2 runs · next</text>
+            <rect x="490" y="262" width="180" height="70" rx="6" fill="#FFFFFF" stroke="#5B6878" strokeWidth="1.4" strokeDasharray="5,4" />
+            <text x="580" y="290" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="Schibsted Grotesk, sans-serif" fill="#16202B">Fallback</text>
+            <text x="580" y="307" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#5B6878">middle · 2 runs · next</text>
           </g>
           {AGENT_TAGS.map(([x, y, t], i) => (
-            <text key={i} x={x} y={y} textAnchor="middle" fontSize="10" fontFamily="JetBrains Mono, monospace" fill="#72726E">{t}</text>
+            <text key={i} x={x} y={y} textAnchor="middle" fontSize="10" fontFamily="JetBrains Mono, monospace" fill="#5B6878">{t}</text>
           ))}
-          <text x="480" y="352" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#72726E">solid = proposal path · dashed = fallback (no key · failed call · rejected)</text>
+          <text x="480" y="352" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#5B6878">solid = proposal path · dashed = fallback (no key · failed call · rejected)</text>
         </svg>
       </div>
       <Key items={[["blue", "ask"], ["teal", "propose"], ["amber", "gate"], ["green", "dispose"], ["slate", "log"]]} />
@@ -708,7 +708,7 @@ function SwarmBench() {
     <figure>
       <div className="svgwrap">
         <svg viewBox="0 0 880 310" role="img" aria-label="Bench harness: scenarios and a simulated GPU feed run_bisect; three swarm roles vote, a referee picks, run_bisect validates, a judge scores against hidden truth, scores land on a per-commit scoreboard">
-          <defs>{marker("sw", "#72726E")}</defs>
+          <defs>{marker("sw", "#5B6878")}</defs>
           {SWARM_NODES.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
           <Edge id="sw" d="M420,60 L466,118" />
           <Edge id="sw" d="M420,134 L466,134" />

@@ -67,6 +67,14 @@ def _synthetic_events(run_id: str = "eval0") -> list[dict]:
             "reason": "near good",
         },
         {
+            "ts": "t2s",
+            "run_id": run_id,
+            "type": "swarm_pick",
+            "chosen": "mmm",
+            "score": 3,
+            "votes": [{"role": "bisector", "sha": "mmm", "confidence": "low"}],
+        },
+        {
             "ts": "t4",
             "run_id": run_id,
             "type": "agent_call",
@@ -537,7 +545,7 @@ def test_throughput_chart_colors_points_and_shows_band(tmp_path: Path):
     html_doc = render_report(_write_events(tmp_path, events))
     assert "ptcolors" in html_doc  # per-verdict point colors
     assert "trial band" in html_doc  # interval band dataset
-    assert "#B3261E" in html_doc  # bad verdict color present
+    assert "#C8323C" in html_doc  # bad verdict color present
     assert "GPU spend" in html_doc
     assert "$0.11" in html_doc  # 180s @ $2.10/h
 
@@ -588,3 +596,61 @@ def test_tune_no_winner_renders_baseline_kept(tmp_path: Path):
     assert "Baseline kept" in html_doc
     assert "Winner: <code>{}</code>" not in html_doc
     assert "<model>" not in html_doc
+
+
+def test_swarm_votes_render_without_warning(tmp_path: Path):
+    import json
+    import warnings
+
+    from perfpilot.report.render import render_report
+
+    events = [
+        {"type": "run_start", "run_id": "r", "mode": "bisect-eval"},
+        {
+            "type": "swarm_pick",
+            "run_id": "r",
+            "chosen": "a" * 40,
+            "score": 4,
+            "votes": [
+                {"role": "bisector", "sha": "b" * 40, "confidence": "low"},
+                {"role": "code_reader", "sha": "a" * 40, "confidence": "high"},
+                {"role": "statistician", "sha": None, "confidence": "low"},
+            ],
+        },
+        {"type": "run_end", "run_id": "r", "status": "culprit"},
+    ]
+    path = tmp_path / "events.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in events))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        html_doc = render_report(path)
+    assert "Swarm votes" in html_doc and "code_reader" in html_doc
+    assert "abstain" in html_doc
+
+
+def test_skipped_trial_is_a_gap_not_zero(tmp_path: Path):
+    import json
+
+    from perfpilot.report.render import render_report
+
+    events = [
+        {"type": "run_start", "run_id": "r"},
+        {
+            "type": "trial_result",
+            "run_id": "r",
+            "sha": "aaa",
+            "status": "ok",
+            "runs": [100.0, 102.0],
+        },
+        {
+            "type": "trial_result",
+            "run_id": "r",
+            "sha": "bbb",
+            "status": "skip",
+            "runs": [],
+        },
+    ]
+    path = tmp_path / "events.jsonl"
+    path.write_text("\n".join(json.dumps(e) for e in events))
+    html_doc = render_report(path)
+    assert "const means=[101.0, null]" in html_doc

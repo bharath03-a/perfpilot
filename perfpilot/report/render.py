@@ -25,6 +25,10 @@ from perfpilot.config import PerfPilotConfig
 from perfpilot.modes.tune import serve_command
 
 CHARTJS_CDN = "https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+FONTS_CSS = (
+    "https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;600;700"
+    "&family=JetBrains+Mono:wght@400&display=swap"
+)
 #: $/h used only when the run_start event lacks gpu_cost_per_hour.
 #: Mirrors PerfPilotConfig.gpu_cost_per_hour (measured A100-40GB rate);
 #: never hardcode a competing constant.
@@ -38,6 +42,7 @@ EVENT_TYPES = (
     "trial_result",
     "verdict",
     "agent_call",
+    "swarm_pick",
     "boundary_update",
     "culprit",
     "verify",
@@ -386,18 +391,22 @@ def _verdict_color(label: str) -> str:
     """Point color for a trial by its verdict label."""
     low = label.lower()
     if low == "good":
-        return "#1a7f37"
+        return "#1F5FBF"
     if low == "bad":
-        return "#B3261E"
+        return "#C8323C"
     if low in ("skip", "skipped"):
-        return "#0F766E"
+        return "#6B5BA8"
     if low in ("ambiguous", "inconclusive"):
         return "#B26A00"
-    return "#72726E"
+    return "#5B6878"
 
 
 def _chart(events: list[dict[str, Any]]) -> str:
-    labels, means, los, his, colors = [], [], [], [], []
+    labels: list[str] = []
+    means: list[float | None] = []
+    los: list[float | None] = []
+    his: list[float | None] = []
+    colors: list[str] = []
     verdict_of: dict[str, str] = {}
     for e in events:
         if e.get("type") == "verdict" and e.get("sha"):
@@ -408,9 +417,15 @@ def _chart(events: list[dict[str, Any]]) -> str:
         sha = str(e.get("sha") or e.get("commit") or "?")
         m, lo, hi = _throughput(e)
         labels.append(sha[:8])
-        means.append(m)
-        los.append(lo if lo is not None else m)
-        his.append(hi if hi is not None else m)
+        if not e.get("runs") and m == 0.0:
+            # skipped/failed trial: a gap, not a fake 0 tok/s cliff
+            means.append(None)
+            los.append(None)
+            his.append(None)
+        else:
+            means.append(m)
+            los.append(lo if lo is not None else m)
+            his.append(hi if hi is not None else m)
         label = verdict_of.get(sha, "")
         if not label:
             status = str(e.get("status", ""))
@@ -433,8 +448,8 @@ def _chart(events: list[dict[str, Any]]) -> str:
         "{label:'range lo',data:los,borderColor:'rgba(0,0,0,0)',"
         "pointRadius:0,fill:false},"
         "{label:'trial band',data:his,borderColor:'rgba(0,0,0,0)',"
-        "pointRadius:0,fill:'-1',backgroundColor:'rgba(178,194,72,0.25)'},"
-        "{label:'mean tok/s',data:means,borderColor:'#292929',borderWidth:2,"
+        "pointRadius:0,fill:'-1',backgroundColor:'rgba(31,95,191,0.14)'},"
+        "{label:'mean tok/s',data:means,borderColor:'#16202B',borderWidth:2,"
         "pointBackgroundColor:ptcolors,pointBorderColor:ptcolors,"
         "pointRadius:4,fill:false}]},"
         "options:{responsive:true,"
@@ -486,9 +501,11 @@ def _agent_panel(events: list[dict[str, Any]]) -> str:
 
     def _fallback(c: dict[str, Any]) -> str:
         fb = c.get("fallback", "")
+        if fb in ("", None):
+            return "—"
         if isinstance(fb, (dict, list)):
             fb = json.dumps(fb, default=str)
-        return _esc(fb)
+        return "<code>" + _esc(fb) + "</code>"
 
     def _proposal(c: dict[str, Any]) -> str:
         proposal = c.get("proposal", {})
@@ -505,9 +522,9 @@ def _agent_panel(events: list[dict[str, Any]]) -> str:
         + _pill("accepted" if c.get("accepted", True) else "rejected")
         + "</td><td>"
         + _esc(c.get("why", c.get("reason", "")))
-        + "</td><td><code>"
+        + "</td><td>"
         + _fallback(c)
-        + "</code></td></tr>"
+        + "</td></tr>"
         for c in calls
     )
     return (
@@ -518,6 +535,38 @@ def _agent_panel(events: list[dict[str, Any]]) -> str:
         "<tr><th>Decision</th><th>Proposal</th><th>Status</th>"
         "<th>Why</th><th>Fallback</th></tr>"
         f"{rows}</table></section>"
+    )
+
+
+_CONF_CLASS = {"high": "good", "medium": "amb", "low": "neutral"}
+
+
+def _swarm_panel(events: list[dict[str, Any]]) -> str:
+    picks = [e for e in events if e.get("type") == "swarm_pick"]
+
+    def _vote(v: dict[str, Any], chosen: str) -> str:
+        sha = str(v.get("sha") or "")
+        conf = str(v.get("confidence", "low"))
+        cls = "p-" + (_CONF_CLASS.get(conf, "neutral") if sha == chosen else "neutral")
+        what = _esc(sha[:9]) if sha else "abstain"
+        return (
+            f"<span class='pill {cls}'>{_esc(v.get('role', ''))} {what} "
+            f"· {_esc(conf)}</span> "
+        )
+
+    rows = "".join(
+        f"<tr><td>{i}</td><td class='sha'><code>{_esc(str(p.get('chosen') or '')[:9])}"
+        f"</code></td><td>{_esc(p.get('score', ''))}</td><td>"
+        + "".join(_vote(v, str(p.get("chosen") or "")) for v in p.get("votes", []))
+        + "</td></tr>"
+        for i, p in enumerate(picks, 1)
+    )
+    return (
+        "<section><h2>Swarm votes</h2>"
+        "<p class='v-cap'>Each pick: every role's proposal and confidence; the "
+        "referee sums confidence weights and bisect validates the winner.</p>"
+        "<table class='grid'><tr><th>#</th><th>Chosen</th><th>Score</th>"
+        f"<th>Votes</th></tr>{rows}</table></section>"
     )
 
 
@@ -695,32 +744,32 @@ def _repro(events: list[dict[str, Any]]) -> str:
 
 
 CSS = (
-    ":root{--bench:#F7F7F2;--panel:#fff;--sunken:#F2F2EC;--ink:#292929;"
-    "--graphite:#72726E;--rule:#E3E3DE;--olive:#5B6F00;--olive-deep:#4C5616;"
-    "--lime:#B2C248;--tint:#F2F6E1;--red:#B3261E;--ochre:#B26A00;--teal:#0F766E;}"
-    "body{font-family:'IBM Plex Sans',-apple-system,'Segoe UI',Helvetica,"
+    ":root{--bench:#EEF1F4;--panel:#fff;--sunken:#F4F6F8;--ink:#16202B;"
+    "--graphite:#5B6878;--rule:#D3D9E0;--olive:#1F5FBF;--olive-deep:#123E80;"
+    "--lime:#9DBBE6;--tint:#E3ECF8;--red:#C8323C;--ochre:#B26A00;--teal:#6B5BA8;}"
+    "body{font-family:'Schibsted Grotesk',-apple-system,'Segoe UI',Helvetica,"
     "Arial,sans-serif;"
     "background:var(--bench);color:var(--ink);max-width:960px;"
     "margin:0 auto;padding:2rem 1.25rem 4rem;line-height:1.55;"
     "-webkit-font-smoothing:antialiased}"
-    "h1{font-family:'Instrument Serif',Georgia,serif;font-weight:400;"
-    "font-size:2rem;margin:0 0 .2rem;letter-spacing:-.01em}"
+    "h1{font-weight:700;"
+    "font-size:2rem;margin:0 0 .2rem;letter-spacing:-.03em}"
     ".runsub{color:var(--graphite);font-size:.9rem;margin:0 0 1.6rem}"
-    "h2{font-family:'Instrument Serif',Georgia,serif;font-weight:400;"
-    "font-size:1.5rem;margin:0 0 .8rem}"
+    "h2{font-weight:700;letter-spacing:-.02em;"
+    "font-size:1.35rem;margin:0 0 .8rem}"
     "section{margin:0 0 1.5rem}"
-    "code{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;font-size:.85em;"
+    "code{font-family:'JetBrains Mono',ui-monospace,Menlo,monospace;font-size:.85em;"
     "background:var(--sunken);border:1px solid var(--rule);border-radius:4px;"
     "padding:.05rem .35rem;word-break:break-all}"
     ".card{background:var(--panel);border:1px solid var(--rule);border-radius:10px;"
     "padding:1.2rem 1.3rem}"
     ".pill{display:inline-block;font-size:.75rem;font-weight:600;border-radius:999px;"
     "padding:.15rem .65rem;vertical-align:middle;white-space:nowrap}"
-    ".p-good{background:#E5F2E5;color:#1a7f37}.p-bad{background:#FBE7E5;color:var(--red)}"
-    ".p-skip{background:#E0F2F1;color:var(--teal)}.p-amb{background:#FBF0D9;color:var(--ochre)}"
+    ".p-good{background:#E3ECF8;color:#1F5FBF}.p-bad{background:#FBE7E8;color:var(--red)}"
+    ".p-skip{background:#EFEBF8;color:var(--teal)}.p-amb{background:#FBF0D9;color:var(--ochre)}"
     ".p-neutral{background:var(--sunken);color:var(--ink)}"
     ".v-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;align-items:start}"
-    ".v-num{font-family:'Instrument Serif',Georgia,serif;font-size:3rem;line-height:1;"
+    ".v-num{font-weight:700;letter-spacing:-.03em;font-size:3rem;line-height:1;"
     "margin:.2rem 0 .4rem}"
     ".v-num.neg{color:var(--red)}.v-num.pos{color:var(--olive-deep)}"
     ".v-cap{color:var(--graphite);font-size:.85rem}"
@@ -735,9 +784,9 @@ CSS = (
     ".ibar .mk{position:absolute;top:-3px;width:3px;"
     "height:calc(.55rem + 6px);background:var(--ink)}"
     ".ibar .zero{position:absolute;top:-3px;width:1px;"
-    "height:calc(.55rem + 6px);background:#B9B9B2}"
+    "height:calc(.55rem + 6px);background:#8C9AAD}"
     ".iscale{display:flex;justify-content:space-between;font-size:.75rem;color:var(--graphite);"
-    "font-family:'IBM Plex Mono',monospace}"
+    "font-variant-numeric:tabular-nums}"
     "table.grid{width:100%;border-collapse:collapse;font-size:.87rem;background:var(--panel);"
     "border:1px solid var(--rule);border-radius:10px;overflow:hidden}"
     "table.grid th,table.grid td{text-align:left;padding:.5rem .7rem;"
@@ -748,7 +797,7 @@ CSS = (
     ".sha{white-space:nowrap}"
     ".banner{border-radius:10px;padding:.9rem 1.1rem;margin:.9rem 0;font-size:.92rem}"
     ".banner.keep{background:var(--tint);border:1px solid var(--lime)}"
-    ".banner.win{background:#E5F2E5;border:1px solid #1a7f37}"
+    ".banner.win{background:#E3ECF8;border:1px solid #1F5FBF}"
     "canvas#tput{max-height:300px}"
     "ul.quals{margin:.5rem 0;padding-left:1.2rem;font-size:.88rem}"
     "ul.quals li{margin:.2rem 0}"
@@ -756,10 +805,10 @@ CSS = (
     "padding:1rem;overflow-x:auto;font-size:.78rem;line-height:1.5}"
     ".costrow{display:grid;grid-template-columns:7rem 1fr 11rem;gap:.7rem;"
     "align-items:center;margin:.3rem 0;font-size:.82rem}"
-    ".costsha{font-family:'IBM Plex Mono',monospace}"
+    ".costsha{font-family:'JetBrains Mono',monospace}"
     ".costbar{display:block;height:.55rem;background:var(--sunken);border-radius:4px}"
     ".costbar i{display:block;height:100%;background:var(--olive);border-radius:4px}"
-    ".costv{font-family:'IBM Plex Mono',monospace;color:var(--graphite);"
+    ".costv{font-variant-numeric:tabular-nums;color:var(--graphite);"
     "white-space:nowrap}"
     "@media(max-width:640px){.costrow{grid-template-columns:5rem 1fr}"
     ".costrow .costv{white-space:normal}}"
@@ -799,11 +848,14 @@ def render_report(events_path: str | Path, live: bool = False) -> str:
     )
     has_tune = bool(types & {"tune_candidate", "tune_accept", "tune_result"})
     has_agent = bool(types & {"agent_call"})
+    has_swarm = bool(types & {"swarm_pick"})
     has_explain = bool(types & {"explain"})
     has_fix = bool(types & {"fix"})
     body = ""
     if has_bisect:
         body += _verdict_card(events) + _timeline(events) + _chart(events)
+    if has_swarm:
+        body += _swarm_panel(events)
     if has_agent:
         body += _agent_panel(events)
     if has_explain:
@@ -817,6 +869,8 @@ def render_report(events_path: str | Path, live: bool = False) -> str:
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         f"<title>PerfPilot report — {_esc(run_id)}</title>{refresh}"
+        "<link rel='icon' href='data:,'>"
+        f"<link rel='stylesheet' href='{FONTS_CSS}'>"
         f"<style>{CSS}</style>"
         f"<script src='{CHARTJS_CDN}'></script></head>"
         f"<body><h1>PerfPilot report — {_esc(run_id)}</h1>"
