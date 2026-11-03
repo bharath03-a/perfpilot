@@ -516,3 +516,70 @@ def test_shared_toolchain_created_once(
     before = len(calls)
     assert env_mod.ensure_shared_toolchain(str(root)) == ""
     assert len(calls) == before
+
+
+def _mk_env(root, name: str, age: int) -> None:
+    import os
+
+    d = root / name
+    d.mkdir()
+    os.utime(d, (1_000_000 + age, 1_000_000 + age))
+
+
+def test_prune_envs_drops_oldest_commit_venvs_only(tmp_path) -> None:
+    a, b, c = "a" * 40, "b" * 40, "c" * 40
+    _mk_env(tmp_path, a, 1)
+    _mk_env(tmp_path, b, 2)
+    _mk_env(tmp_path, c, 3)
+    _mk_env(tmp_path, "bench-client", 0)
+    free = iter([5.0, 5.0, 15.0, 40.0])  # guard read, then one per candidate
+    removed = env.prune_envs(
+        keep=c, env_root=str(tmp_path), min_free_gb=25.0, free_gb=lambda: next(free)
+    )
+    assert removed == [a, b]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["bench-client", c]
+
+
+def test_prune_envs_noop_when_space_is_fine(tmp_path) -> None:
+    _mk_env(tmp_path, "a" * 40, 1)
+    assert env.prune_envs(keep="", env_root=str(tmp_path), free_gb=lambda: 100.0) == []
+
+
+def test_disk_full_install_prunes_and_retries(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    monkeypatch.setattr(env, "is_env_cached", lambda *a: False)
+    monkeypatch.setattr(env, "read_installed_sha", lambda venv: SHA[:12])
+    monkeypatch.setattr(env, "read_vllm_version", lambda venv: "0.32.0")
+    monkeypatch.setattr(env, "ensure_toolchain", lambda venv: "")
+    pruned: list[float] = []
+    monkeypatch.setattr(
+        env,
+        "prune_envs",
+        lambda keep, env_root=None, min_free_gb=25.0, **k: (
+            pruned.append(min_free_gb) or []
+        ),
+    )
+    installs = {"n": 0}
+
+    def fake_run(cmd: list[str], timeout_s: float):
+        if cmd[:2] == ["uv", "venv"]:
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        installs["n"] += 1
+        if installs["n"] == 1:
+            return subprocess.CompletedProcess(
+                cmd, 2, "", "failed to copy file: No space left on device (os error 28)"
+            )
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(env, "run_command", fake_run)
+    res = env.ensure_server_env(SHA, env_root=str(tmp_path))
+    assert not res.skipped and installs["n"] == 2
+    assert len(pruned) == 2 and pruned[1] > pruned[0]
+
+
+def test_disk_full_reason_is_distinct() -> None:
+    reason = env.classify_install_failure(
+        2, "copy x: No space left on device (os error 28)"
+    )
+    assert reason.startswith("cache volume full")

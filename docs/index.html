@@ -51,8 +51,8 @@
     <dl class="facts">
       <div><dt>0</dt><dd>wrong verdicts, on A100 runs and across 17 benchmark scenarios</dd></div>
       <div><dt>17</dt><dd>failure scenarios replayed for $0 on every change</dd></div>
-      <div><dt>$7.46</dt><dd>total GPU spend so far, stated per run</dd></div>
-      <div><dt>218</dt><dd>tests passing, lint clean</dd></div>
+      <div><dt>$8.63</dt><dd>total GPU spend so far, stated per run</dd></div>
+      <div><dt>222</dt><dd>tests passing, lint clean</dd></div>
     </dl>
 
     <section class="block" id="how" aria-labelledby="how-title">
@@ -97,6 +97,7 @@ perfpilot bench --suite all --seeds 20</pre>
           <tr><td><a href="runs/m2-eval-9/report.html">m2-eval-9</a></td><td>commit 1</td><td>range of 15, culprit inside</td><td>$3.32</td><td>One collapsed baseline run (1,703 against ~3,590 tok/s) poisoned the variance. Fixed by re-measuring noisy endpoints.</td></tr>
           <tr><td><a href="runs/m2-eval-10/report.html">m2-eval-10</a></td><td>last commit, mild</td><td>no regression</td><td>$1.31</td><td>Correct: the mild slowdown measured −0.8%, below the 3% floor, so there was nothing to find.</td></tr>
           <tr><td><a href="runs/m2-eval-11/report.html">m2-eval-11</a></td><td>commit 1</td><td>range of 2, culprit inside</td><td>$1.23</td><td>Same setup as m2-eval-9 after the fix: 11 measurements instead of 26.</td></tr>
+          <tr><td><a href="runs/eval-t0-20261102-232311/report.html">eval-t0 (swarm)</a></td><td>commit 7</td><td>range of 6, culprit inside</td><td>$1.17</td><td>First end-to-end run with the live Baseten swarm reading real vLLM commit messages. Every measured commit was labelled correctly, but 6 of 12 builds failed because the GPU's cache disk filled up, which widened the range. The worker now prunes old builds and retries.</td></tr>
         </table>
       </div>
       <h3>Tuning serve flags</h3>
@@ -145,6 +146,7 @@ perfpilot bench --suite all --seeds 20</pre>
         <button role="tab" aria-selected="true" data-run="m2-eval-11">m2-eval-11 bisect</button>
         <button role="tab" aria-selected="false" data-run="m2-eval-9">m2-eval-9 bisect</button>
         <button role="tab" aria-selected="false" data-run="m2-eval-10">m2-eval-10 bisect</button>
+        <button role="tab" aria-selected="false" data-run="eval-t0-20261102-232311">eval-t0 swarm bisect</button>
         <button role="tab" aria-selected="false" data-run="tune-20261101-150900">Flag tuning</button>
       </div>
       <div class="report-frame">
@@ -198,6 +200,7 @@ perfpilot bench --suite all --seeds 20</pre>
     "m2-eval-9": "26 measurements, culprit range of 15, $3.32.",
     "m2-eval-10": "No regression: the planted slowdown measured −0.8%. $1.31.",
     "m2-eval-11": "11 measurements, culprit range of 2, $1.23.",
+    "eval-t0-20261102-232311": "Live swarm on an A100, culprit range of 6 containing the planted commit, $1.17. Six builds failed on a full cache disk.",
     "tune-20261101-150900": "6 flag candidates, baseline kept, quality held, about $1.60."
   };
   var view = document.getElementById("report-view");

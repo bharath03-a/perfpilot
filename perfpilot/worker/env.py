@@ -21,6 +21,7 @@ import os
 import re
 import shutil
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 
 WHEEL_ROOT = "https://wheels.vllm.ai"
@@ -133,8 +134,56 @@ class EnvResult:
     reason: str = ""
 
 
+#: Per-SHA venvs are several GB each; the eval-12 GPU run lost 6 of 12
+#: trials to ENOSPC on the shared cache volume before pruning existed.
+MIN_FREE_GB = 25.0
+RETRY_FREE_GB = 60.0
+DISK_FULL = "no space left on device"
+
+
+def _free_gb(path: str) -> float:
+    return shutil.disk_usage(path).free / 1e9
+
+
+def prune_envs(
+    keep: str,
+    env_root: str = ENV_ROOT,
+    min_free_gb: float = MIN_FREE_GB,
+    free_gb: Callable[[], float] | None = None,
+) -> list[str]:
+    """Delete least-recently-used per-commit venvs until enough space is free.
+
+    Only 40-hex SHA dirs are candidates: the current commit, the bench
+    client and the toolchain are never touched.
+    """
+    import os
+
+    measure = free_gb or (lambda: _free_gb(env_root))
+    if not os.path.isdir(env_root) or measure() >= min_free_gb:
+        return []
+    candidates = sorted(
+        (
+            entry
+            for entry in os.scandir(env_root)
+            if entry.is_dir() and is_full_sha(entry.name) and entry.name != keep
+        ),
+        key=lambda entry: entry.stat().st_mtime,
+    )
+    removed: list[str] = []
+    for entry in candidates:
+        if measure() >= min_free_gb:
+            break
+        shutil.rmtree(entry.path, ignore_errors=True)
+        removed.append(entry.name)
+        print(f"[perfpilot] pruned cached venv {entry.name[:12]} for space", flush=True)
+    return removed
+
+
 def classify_install_failure(returncode: int, stderr: str) -> str:
     blob = stderr.lower()
+    if DISK_FULL in blob:
+        tail = stderr.strip()[-200:]
+        return f"cache volume full after pruning (rc={returncode}): {tail}"
     if "404" in blob or "not found" in blob or "no matching distribution" in blob:
         return "no wheel for commit (index 404 / no matching distribution)"
     if "network" in blob or "connection" in blob or "timed out" in blob:
@@ -173,33 +222,39 @@ def ensure_server_env(
         )
         shutil.rmtree(venv, ignore_errors=True)
 
-    shutil.rmtree(venv, ignore_errors=True)
-    proc = run_command(build_venv_command(venv), timeout_s=300.0)
-    if proc.returncode != 0:
-        tail = proc.stderr.strip()[-300:]
-        return EnvResult(
-            venv=venv,
-            cached=False,
-            skipped=True,
-            reason=f"uv venv failed (rc={proc.returncode}): {tail}",
-        )
-    # ONLY the per-commit index: installing any other commit's wheel (e.g.
-    # latest nightly) would silently measure the wrong binary. Any failure
-    # here is a skip, never a fallback.
+    prune_envs(commit, env_root)
     index_url = wheel_index_url(commit)
-    try:
-        proc = run_command(
-            build_install_command(venv_python(venv), index_url),
-            timeout_s=install_timeout_s,
-        )
-    except subprocess.TimeoutExpired:
+    for attempt in (1, 2):
         shutil.rmtree(venv, ignore_errors=True)
-        return EnvResult(
-            venv=venv,
-            cached=False,
-            skipped=True,
-            reason=f"wheel install timed out via {index_url}",
-        )
+        proc = run_command(build_venv_command(venv), timeout_s=300.0)
+        if proc.returncode != 0:
+            tail = proc.stderr.strip()[-300:]
+            return EnvResult(
+                venv=venv,
+                cached=False,
+                skipped=True,
+                reason=f"uv venv failed (rc={proc.returncode}): {tail}",
+            )
+        # ONLY the per-commit index: installing any other commit's wheel (e.g.
+        # latest nightly) would silently measure the wrong binary. Any failure
+        # here is a skip, never a fallback.
+        try:
+            proc = run_command(
+                build_install_command(venv_python(venv), index_url),
+                timeout_s=install_timeout_s,
+            )
+        except subprocess.TimeoutExpired:
+            shutil.rmtree(venv, ignore_errors=True)
+            return EnvResult(
+                venv=venv,
+                cached=False,
+                skipped=True,
+                reason=f"wheel install timed out via {index_url}",
+            )
+        if proc.returncode == 0 or DISK_FULL not in proc.stderr.lower() or attempt == 2:
+            break
+        shutil.rmtree(venv, ignore_errors=True)
+        prune_envs(commit, env_root, min_free_gb=RETRY_FREE_GB)
     if proc.returncode == 0:
         installed = read_installed_sha(venv)
         if not installed or not commit.startswith(installed):

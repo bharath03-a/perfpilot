@@ -38,7 +38,7 @@ tune --commit C → propose flags → measure → quality gate (50Q bank)
 | M4 tune + verify | GPU evaluated | 6 flag candidates, none beat baseline +2% (5 no-uplift, fp8 impossible on A100 recorded as rejection); baseline kept, quality held |
 | M5 report/watch/README | in progress | 7 recorded runs re-render; this file |
 
-Suite: **218 passed, 1 skipped**, `ruff check` + `format` clean.
+Suite: **222 passed, 1 skipped**, `ruff check` + `format` clean.
 
 ## Eval (local, fake transport)
 
@@ -76,6 +76,13 @@ questions — never merged into one score.
 | 0 | strong overlay, idx 1 | `culprit_range` (15 wide, idx 1 inside) | by inclusion, unverified | Baseline probe returned `[3569, 3594, 1703]` — one collapsed run poisoned variance, nothing separated after (steps=0, 10 extra runs, 26 probes, $3.32) |
 | 1 | mild overlay, idx 15 | `no_regression` | n/a — premise failed | Endpoints 3522 vs 3495 tok/s (-0.8%): the mild overlay has no measurable effect, so there was no regression to find |
 | 11 | strong overlay, idx 1 (fixed driver) | `culprit_range` (2 wide, idx 1 inside) | by inclusion, unverified | Baseline fix validated on GPU: same config as trial 0 converged in 11 probes / steps=2 at $1.23 instead of 26 probes at $3.32 — no outlier blowup |
+
+End-to-end with the live swarm (`perfpilot eval --agent swarm --culprit 7
+--commits-from runs/m2-eval-11`, `runs/eval-t0-20261102-232311`, $1.17): culprit range
+of 6 containing planted commit 7, 12 trials, every measured commit labelled
+correctly. Six trials failed at wheel install with `No space left on device`
+on the Modal cache volume; the worker now prunes least-recently-used venvs
+before installing and retries once on disk-full (tested).
 
 Wrong verdicts at any step: 0 in all trials (all intermediates ambiguous or
 skipped; endpoints labeled correctly). GPU minutes + per-trial cost are in
@@ -177,7 +184,7 @@ baseline could distinguish this case. The eval protocol therefore plants at
 ## Cost
 
 Modal A100-40GB at $2.10/h. Trials are the only spend; local logic, reports,
-and brain calls are ~$0. Spend so far (metered): eval $5.86 + tune ~$1.60;
+and brain calls are ~$0. Spend so far (metered): eval $5.86 + tune ~$1.60 + swarm e2e $1.17;
 Modal app stopped after each session, no idle bleed.
 
 ## Setup
@@ -223,6 +230,6 @@ Each run writes `runs/<id>/`: `config.yaml`, `events.jsonl`, `report.html`,
 
 Meta Global AI Developer Hackathon, Indie track (Push the Frontier) — all
 code in `perfpilot/` written this week on a clean layout (old scaffold
-deleted per plan). Evidence per milestone: 218-test suite, 11 recorded run
+deleted per plan). Evidence per milestone: 222-test suite, 11 recorded run
 reports under `runs/`, live GPU eval on Modal A100s, agent brain on Baseten.
 Full chronology in [PLAN.md](PLAN.md).
