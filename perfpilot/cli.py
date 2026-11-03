@@ -67,7 +67,7 @@ def bisect(
     bad: str | None = typer.Option(None, "--bad"),
 ) -> None:
     """Bisect a commit range for the first slow commit."""
-    from perfpilot.git_info import commits_between
+    from perfpilot.git_info import commit_infos_between
     from perfpilot.modes import BisectParams, TrialOutcome
     from perfpilot.modes.driver import drive_bisect_live
     from perfpilot.orchestrator import make_extra_runs_fn, make_pick_fn
@@ -81,7 +81,9 @@ def bisect(
     wl = _workload_dict(cfg)
     worker = _deployed_worker()
     run_id = _run_id("bisect")
-    commits = commits_between(cfg.bisect.repo, good_sha, bad_sha)
+    infos = commit_infos_between(cfg.bisect.repo, good_sha, bad_sha)
+    commits = [c.sha for c in infos]
+    messages = {c.sha: c.message for c in infos}
     typer.echo(f"range: {len(commits)} commits")
 
     def measure(sha: str, runs: int) -> TrialOutcome:
@@ -93,10 +95,12 @@ def bisect(
             workload=wl,
             inject=None,
         )
+        reason = str(result.get("reason", result.get("status")))
+        if result.get("status") == "skip":
+            return TrialOutcome(skipped=True, reason=reason)
         if result.get("status") != "ok":
-            return TrialOutcome(
-                skipped=True, reason=str(result.get("reason", result.get("status")))
-            )
+            # prefix marks it transient so run_bisect retries it
+            return TrialOutcome(skipped=True, reason=f"trial error: {reason}")
         valid = [
             r
             for r in result.get("runs", [])
@@ -109,7 +113,7 @@ def bisect(
     pick = extra = explain_fn = draft_fn = None
     orch = _make_orchestrator(cfg, run_id, Path("runs") / run_id)
     if orch is not None:
-        pick = make_pick_fn(orch, metric=cfg.metrics.primary)
+        pick = make_pick_fn(orch, metric=cfg.metrics.primary, messages=messages)
         extra = make_extra_runs_fn(orch, max_runs=cfg.stats.max_runs)
 
         def draft_fn(sha, patch):
@@ -223,7 +227,7 @@ def tune(
     propose = None
     orch = _make_orchestrator(cfg, run_id, Path("runs") / run_id)
     if orch is not None:
-        propose = make_propose_fn(orch, cfg.tune.knobs)
+        propose = make_propose_fn(orch, cfg.tune.knobs, hardware=cfg.gpu)
     outcome = drive_tune_live(
         base_commit=base_commit,
         knob_space=dict(cfg.tune.knobs),
@@ -342,8 +346,11 @@ def eval(
 
     cfg = _load(config)
     wl = _workload_dict(cfg)
+    from perfpilot.evals.run_eval import seeded_culprit_positions
+
     commits = wheeled_range(cfg.bisect.repo, 16)
-    positions = [0, len(commits) - 1][: max(trials, 1)]
+    # index 0 has no clean in-range baseline; see README "Known limitation"
+    positions = seeded_culprit_positions(max(trials, 1), len(commits))
     results = []
     for i, pos in enumerate(positions):
         summary = drive_eval_trial(
@@ -367,3 +374,58 @@ def eval(
             f"verified={summary['verified']} cost=${summary['cost_usd']:.2f}"
         )
     typer.echo(f"{sum(r['correct'] for r in results)}/{len(results)} correct")
+
+
+@app.command()
+def bench(
+    variants: str = typer.Option("fallback,single,swarm", "--variants"),
+    seeds: int = typer.Option(5, "--seeds", min=1, max=50),
+    live_brain: bool = typer.Option(
+        False, "--live-brain", help="Roles call the Baseten brain (needs key)"
+    ),
+    record: bool = typer.Option(False, "--record", help="Append to scoreboard"),
+    board: Path = typer.Option(Path("bench/scoreboard.jsonl"), "--board"),
+    suite: str = typer.Option("all", "--suite", help="core | stress | all"),
+) -> None:
+    """Score agent variants on a simulated GPU ($0 GPU). Tracks progress."""
+    import subprocess
+
+    from perfpilot.bench.format import scenario_table, trend_table, variant_table
+    from perfpilot.bench.harness import VARIANTS, run_suite
+    from perfpilot.bench.scenarios import ALL_SCENARIOS, SCENARIOS, STRESS
+    from perfpilot.bench.scoreboard import append_entry, load_entries, trend_rows
+
+    chosen = [v.strip() for v in variants.split(",") if v.strip()]
+    unknown = [v for v in chosen if v not in VARIANTS]
+    if unknown or not chosen:
+        typer.echo(f"error: variants must be from {VARIANTS}, got {unknown}", err=True)
+        raise typer.Exit(code=2)
+    suites = {"core": SCENARIOS, "stress": STRESS, "all": ALL_SCENARIOS}
+    if suite not in suites:
+        typer.echo(f"error: --suite must be one of {sorted(suites)}", err=True)
+        raise typer.Exit(code=2)
+    mode = ("live" if live_brain else "scripted") + (
+        "" if suite == "core" else f"-{suite}"
+    )
+    workdir = Path("runs") / _run_id("bench")
+    summary = run_suite(
+        chosen, seeds=seeds, scenarios=suites[suite], live=live_brain, workdir=workdir
+    )
+    typer.echo(f"mode={mode} seeds={seeds} scenarios={len(suites[suite])}\n")
+    typer.echo(variant_table(summary) + "\n")
+    typer.echo(scenario_table(summary) + "\n")
+    if record:
+        sha = (
+            subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+            ).stdout.strip()
+            or "unknown"
+        )
+        append_entry(board, summary, git_sha=sha, mode=mode)
+    for v in chosen:
+        rows = trend_rows(load_entries(board), variant=v, mode=mode)
+        if rows:
+            typer.echo(f"trend: {v} ({mode})\n" + trend_table(rows[-10:]) + "\n")

@@ -17,6 +17,8 @@ htmlcov/
 *.jsonl
 # ...except the curated copies embedded in the Pages site
 !docs/runs/**
+# ...and the bench scoreboard, which tracks progress per commit
+!bench/*.jsonl
 
 # Secrets / local config overrides
 .env

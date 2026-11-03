@@ -153,7 +153,10 @@ def drive_eval_trial(
             return raw_measure(sha, runs)
         return first
 
-    outcome: BisectOutcome = run_bisect(commits, measure, params=BisectParams())
+    # driver retries (and logs) itself; avoid stacking core retries on top
+    outcome: BisectOutcome = run_bisect(
+        commits, measure, params=BisectParams(transient_retries=0)
+    )
     verdicts = []
     for sha in outcome.tested_order:
         label = str(outcome.labels.get(sha, "untested"))

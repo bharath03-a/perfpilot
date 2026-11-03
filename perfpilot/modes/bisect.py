@@ -41,6 +41,13 @@ class BisectParams(BaseModel):
     drift_every: int = Field(default=4, ge=1)
     drift_runs: int = Field(default=2, ge=2)
     drift_threshold: float = Field(default=0.02, gt=0.0)
+    transient_retries: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="Re-run a trial whose reason starts with 'trial error' "
+        "(preemption, OOM, cold container). Build skips are never retried.",
+    )
     baseline_max_spread: float = Field(
         default=0.30,
         gt=0.0,
@@ -335,6 +342,18 @@ def _spread(samples: list[float]) -> float:
     return (max(samples) - min(samples)) / abs(mean)
 
 
+def _trim_collapsed(samples: list[float], p: BisectParams) -> list[float] | None:
+    """Drop runs far from the pooled median (collapsed runs); None if too few left."""
+    ordered = sorted(samples)
+    n = len(ordered)
+    median = (ordered[(n - 1) // 2] + ordered[n // 2]) / 2.0
+    if median <= 0:
+        return None
+    band = p.baseline_max_spread / 2.0
+    kept = [x for x in samples if abs(x - median) / median <= band]
+    return kept if len(kept) >= p.min_runs else None
+
+
 def _safe_classify(
     samples: list[float], good: list[float], full_effect: float, confidence: float
 ) -> Verdict:
@@ -360,6 +379,23 @@ def _outcome_lists(state: BisectState) -> tuple[list[str], list[str]]:
     return skipped, ambiguous
 
 
+TRANSIENT_PREFIX = "trial error"
+
+
+def with_transient_retries(measure: MeasureFn, retries: int) -> MeasureFn:
+    """Retry transient worker errors; a persistent one still surfaces."""
+
+    def wrapped(sha: str, runs: int) -> TrialOutcome:
+        outcome = measure(sha, runs)
+        for _ in range(retries):
+            if not (outcome.skipped and outcome.reason.startswith(TRANSIENT_PREFIX)):
+                break
+            outcome = measure(sha, runs)
+        return outcome
+
+    return wrapped
+
+
 def run_bisect(
     commits: Sequence[str],
     measure: MeasureFn,
@@ -377,6 +413,7 @@ def run_bisect(
     as a fallback with its reason in ``pick_log``; it never raises.
     """
     p = params or BisectParams()
+    measure = with_transient_retries(measure, p.transient_retries)
     items = list(commits)
     state = new_bisect_state(items)
     extra_fn = extra_runs or default_extra_runs
@@ -433,6 +470,15 @@ def run_bisect(
         if not _fresh(second):
             return first
         first_spread, second_spread = _spread(first.samples), _spread(second.samples)
+        trimmed = _trim_collapsed([*first.samples, *second.samples], p)
+        if trimmed is not None and _spread(trimmed) < min(first_spread, second_spread):
+            dropped = len(first.samples) + len(second.samples) - len(trimmed)
+            state.pick_log.append(
+                f"endpoint re-measured for {label} {sha[:9]}: both sets noisy "
+                f"({first_spread:.2f}, {second_spread:.2f}); pooled, dropped "
+                f"{dropped} run(s) >{p.baseline_max_spread / 2:.0%} from median"
+            )
+            return TrialOutcome(samples=trimmed)
         kept = "second" if second_spread < first_spread else "first"
         state.pick_log.append(
             f"endpoint re-measured for {label} {sha[:9]}: spread "
@@ -539,8 +585,8 @@ def run_bisect(
                 if check.exceeded:
                     state.endpoint_remeasures += 1
                     cur_bad = items[state.bad_idx]
-                    fresh_good = measured(cur_good, p.min_runs)
-                    fresh_bad = measured(cur_bad, p.min_runs)
+                    fresh_good = stable_endpoint(cur_good, "good")
+                    fresh_bad = stable_endpoint(cur_bad, "bad")
                     if _fresh(fresh_good) and _fresh(fresh_bad):
                         try:
                             reconfirm = confirm_regression(

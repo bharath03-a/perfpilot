@@ -38,7 +38,7 @@ tune --commit C → propose flags → measure → quality gate (50Q bank)
 | M4 tune + verify | GPU evaluated | 6 flag candidates, none beat baseline +2% (5 no-uplift, fp8 impossible on A100 recorded as rejection); baseline kept, quality held |
 | M5 report/watch/README | in progress | 7 recorded runs re-render; this file |
 
-Suite: **190 passed, 1 skipped**, `ruff check` + `format` clean.
+Suite: **213 passed, 1 skipped**, `ruff check` + `format` clean.
 
 ## Eval (local, fake transport)
 
@@ -92,6 +92,51 @@ Two findings, both evidence-backed:
    (measured -0.8%). It should be dropped or replaced as an eval overlay —
    trial 1's `no_regression` is the *right* answer to the wrong premise.
 
+## Swarm + bench harness ($0 GPU)
+
+`perfpilot bench` scores agent variants on a **simulated A100** (seeded
+noise, collapsed-run outliers at the 0.47× factor seen live, metered
+setup+run seconds at $2.10/h) across 7 planted scenarios × N seeds, and
+appends each run to `bench/scoreboard.jsonl` keyed by git SHA so progress
+is tracked per commit.
+
+Variants: `fallback` (deterministic midpoint), `single` (one reasoning
+agent), `swarm` — three roles propose the next commit (**bisector** halves,
+**code_reader** flags hot-path commit messages, **statistician** probes a
+bad hint's parent to pin the edge) and a deterministic **referee** sums
+confidence-weighted votes, ties to the most even split. Roles only propose;
+bisect still validates every pick, so a bad role costs probes, never a
+verdict. `--live-brain` swaps scripted roles for Baseten personas (votes
+logged as `swarm_pick` events).
+
+Scripted mode, 20 seeds × **17 scenarios** (7 core + 10 stress:
+stacked culprits, broken builds, flaky worker, rig drift, 5% borderline,
+transient regression, speedup, 64-commit range, hint spam, edge culprit) —
+`perfpilot bench --suite all --seeds 20`:
+
+| Variant | Correct | Exact | Wrong | Probes/run | $/run (sim) | Score |
+|---|---|---|---|---|---|---|
+| fallback | 100% | 91% | 0 | 8.74 | $1.73 | 82.5 |
+| single | 100% | 91% | 0 | 8.79 | $1.74 | 82.4 |
+| swarm | 100% | 91% | 0 | 8.61 | $1.71 | 82.8 |
+
+Score = 100·correct − 200·wrong − 2·probes (per-run means). "Exact" < 100%
+only where a range is the honest answer (broken builds around the culprit,
+5% borderline drops at the 8-run cap).
+
+Failures the harness surfaced, each fixed test-first with replayed evidence:
+
+| Scenario | Before | After | Fix |
+|---|---|---|---|
+| outlier (collapsed runs) | 17/20 | 20/20 (40/40 seeds) | drift re-measure uses the endpoint spread guard; when both endpoint sets are contaminated, pool them and drop runs >15% from the median (logged) |
+| flaky_worker (10% preemptions) | 16/20, 4 aborts, 11 exact | 20/20, 20 exact | `run_bisect` retries `trial error` outcomes (default 2); build skips never retried; live CLI now tags worker errors as transient instead of as build skips |
+| hint_spam (every msg says "kernel") | swarm 20.3 probes | 9.1 | code_reader abstains when >25% of the open range matches — a hint must discriminate |
+| code_hint | 9.0 probes | **6.0 (swarm)** | code_reader + statistician confirm-parent combo |
+
+Known limits, stated: a misleading hint costs ~1 probe (never a verdict);
+5% regressions under 1.5% noise need ~17 probes; scripted roles are
+heuristics — only `--live-brain` scores the real model.
+
 ## Tune (GPU, `runs/tune-20261101-150900`, ~$1.60)
 
 Base `e5196e29`, 6 candidates max, live brain proposing, 50Q quality gate:
@@ -138,6 +183,7 @@ uv run perfpilot report runs/<run-id>   # watch: live refresh
 uv run perfpilot demo runs/<run-id> --speed 1.5  # replay a run, no GPU/key
 uv run perfpilot eval --trials 2        # GPU; needs quota + approval
 make test   # pytest
+make bench  # $0 swarm/variant scoreboard, 17 scenarios (make bench-record to log)
 make lint   # ruff check + format
 ```
 
@@ -150,14 +196,21 @@ Each run writes `runs/<id>/`: `config.yaml`, `events.jsonl`, `report.html`,
 - **Open weights**: measured model `meta-llama/Llama-3.2-1B`; agent brain
   `meta-models/muse-spark-open-1026`. Every model in the loop is open.
 - **Agentic loop**: brain proposes, driver measures, stats disposes —
-  accepted/rejected proposal log in `events.jsonl`; fallbacks keep every run
-  completing with no key.
+  accepted/rejected proposal log in `agent-events.jsonl`; fallbacks keep every
+  run completing with no key.
+- **Evidence-grounded brain**: every decision sees measured state, not just
+  SHAs — `pick_commit` gets commit messages plus a per-commit table
+  (runs, effect ln(c/good), interval, label); `extra_runs` gets the real
+  decision midpoint m = R/2; `propose_config` gets each tried flag's measured
+  uplift/interval and verdict, plus a hardware note (e.g. "A100: no FP8").
+  Fixed after recorded runs showed the brain saying "no commit messages
+  provided" and proposing fp8 on an A100.
 - Built this week, clean `perfpilot/` layout; no work or healthcare data, ever.
 
 ## Built during
 
 Meta Global AI Developer Hackathon, Indie track (Push the Frontier) — all
 code in `perfpilot/` written this week on a clean layout (old scaffold
-deleted per plan). Evidence per milestone: 190-test suite, 11 recorded run
+deleted per plan). Evidence per milestone: 213-test suite, 11 recorded run
 reports under `runs/`, live GPU eval on Modal A100s, agent brain on Baseten.
 Full chronology in [PLAN.md](PLAN.md).
