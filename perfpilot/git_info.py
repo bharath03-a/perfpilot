@@ -62,8 +62,8 @@ def newest_wheeled_sha() -> str:
     return m.group(1)
 
 
-def commits_between(repo: str, good: str, bad: str) -> list[str]:
-    """Oldest-first SHAs from good to bad via the compare API.
+def commit_infos_between(repo: str, good: str, bad: str) -> list[CommitInfo]:
+    """Oldest-first commits (SHA + first message line) via the compare API.
 
     The API caps the returned list (~250 commits); larger ranges need
     pagination the API does not offer — keep bisect ranges small.
@@ -74,7 +74,18 @@ def commits_between(repo: str, good: str, bad: str) -> list[str]:
         "identical",
     ):
         raise RuntimeError(f"compare {good[:12]}...{bad[:12]}: not ahead")
-    return [c["sha"] for c in data.get("commits", []) if len(c.get("sha", "")) == 40]
+    out: list[CommitInfo] = []
+    for c in data.get("commits", []):
+        sha = c.get("sha", "")
+        if len(sha) != 40:
+            continue
+        lines = (c.get("commit", {}).get("message", "") or "").splitlines()
+        out.append(CommitInfo(sha=sha, message=lines[0] if lines else ""))
+    return out
+
+
+def commits_between(repo: str, good: str, bad: str) -> list[str]:
+    return [c.sha for c in commit_infos_between(repo, good, bad)]
 
 
 def commit_diff_paths(repo: str, sha: str) -> tuple[str, list[str]]:

@@ -30,6 +30,7 @@ class Verdict(BaseModel):
     hi: float
     confidence: float
     reason: str
+    midpoint: float | None = None
 
 
 def _t_critical(df: float, confidence: float) -> float:
@@ -143,7 +144,7 @@ def confirm_regression(
     )
 
 
-def classify_commit(
+def _classify_commit(
     commit: Sequence[float],
     good: Sequence[float],
     full_effect: float,
@@ -207,6 +208,17 @@ def classify_commit(
         confidence=confidence,
         reason=f"interval straddles m={m:.4f}: inconclusive",
     )
+
+
+def classify_commit(
+    commit: Sequence[float],
+    good: Sequence[float],
+    full_effect: float,
+    confidence: float = 0.90,
+) -> Verdict:
+    """Bisect midpoint rule with m = R / 2; else inconclusive."""
+    verdict = _classify_commit(commit, good, full_effect, confidence)
+    return verdict.model_copy(update={"midpoint": full_effect / 2.0})
 
 
 def tune_accepts(

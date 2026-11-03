@@ -38,7 +38,7 @@ from perfpilot.agent.tools import (
 )
 from perfpilot.modes.bisect import BisectState, open_range
 from perfpilot.modes.tune import CandidateRecord, KnobProposal, config_key
-from perfpilot.stats import Verdict
+from perfpilot.stats import Verdict, log_ratio_interval
 
 EVENT_TYPES = (
     "run_start",
@@ -350,12 +350,13 @@ class AgentOrchestrator:
         knobs: Mapping[str, Sequence[Any]],
         baseline: str | Mapping[str, Any] = "",
         metric: str = "output_throughput",
+        constraints: str = "",
     ) -> Decision[list[str]]:
         fallback = list(knobs.keys())
         user = (
             f"Baseline {metric}: {baseline}.\n"
             f"Supported knobs and values: {dict(knobs)}."
-        )
+        ) + _constraints_line(constraints)
         proposal, note = self._ask("rank_knobs", user, RankKnobs)
         if proposal is None:
             why = f"{note}; using config order"
@@ -401,6 +402,7 @@ class AgentOrchestrator:
         knob_order: Sequence[str] | None = None,
         best: Mapping[str, Any] | str | None = None,
         history: Sequence[Mapping[str, Any]] | None = None,
+        constraints: str = "",
     ) -> Decision[ProposeConfig | None]:
         base = _best_config(best)
         tried_keys = _tried_keys(base, tried)
@@ -415,7 +417,7 @@ class AgentOrchestrator:
             f"Already tried: {sorted(tried_keys, key=str)}.\n"
             f"Allowed values: {dict(knobs)}.\n"
             f"Results so far:\n{history_table(list(history or []))}"
-        )
+        ) + _constraints_line(constraints)
         proposal, note = self._ask("propose_config", user, ProposeConfig)
         if proposal is None:
             why = f"{note}; using {fallback.knob}={fallback.value}"
@@ -504,6 +506,70 @@ class AgentOrchestrator:
         return Decision(proposal, True, note)
 
 
+#: Known capability gaps the brain otherwise ignores (live run proposed fp8 on A100).
+GPU_NOTES: dict[str, str] = {
+    "A100": "Ampere sm80: no FP8 compute or FP8 KV cache",
+    "A10G": "Ampere sm86: no FP8, 24GB memory",
+    "L4": "Ada sm89: FP8 supported, 24GB memory",
+    "H100": "Hopper sm90: FP8 supported",
+}
+
+
+def hardware_note(gpu: str) -> str:
+    if not gpu:
+        return ""
+    note = GPU_NOTES.get(gpu.upper())
+    return f"Hardware: {gpu} ({note})." if note else f"Hardware: {gpu}."
+
+
+def _constraints_line(constraints: str) -> str:
+    return (
+        f"\n{constraints} Do not propose values this hardware cannot run."
+        if constraints
+        else ""
+    )
+
+
+def bisect_history(state: BisectState) -> list[dict[str, Any]]:
+    """Measured evidence per tested commit, effect = ln(commit / good)."""
+    good = state.samples.get(state.commits[state.good_idx], [])
+    rows: list[dict[str, Any]] = []
+    for sha in state.tested_order:
+        samples = state.samples.get(sha, [])
+        label = state.labels.get(sha)
+        row: dict[str, Any] = {
+            "commit": sha,
+            "runs": len(samples),
+            "label": label.value if label is not None else "?",
+        }
+        try:
+            iv = log_ratio_interval(samples, good)
+            row = {
+                **row,
+                "effect": round(iv.effect, 3),
+                "lo": round(iv.lo, 3),
+                "hi": round(iv.hi, 3),
+            }
+        except ValueError:
+            pass  # too few samples for an interval; row still shows label/runs
+        rows.append(row)
+    return rows
+
+
+def candidate_history(candidates: Sequence[CandidateRecord]) -> list[dict[str, Any]]:
+    """Measured uplift per tried flag so the brain stops re-proposing duds."""
+    return [
+        {
+            "commit": f"{c.knob}={c.value!r}",
+            "effect": round(c.effect, 3),
+            "lo": round(c.lo, 3),
+            "hi": round(c.hi, 3),
+            "label": f"{c.decision}: {c.reason}"[:80],
+        }
+        for c in candidates
+    ]
+
+
 def make_pick_fn(
     orch: AgentOrchestrator,
     metric: str = "output_throughput",
@@ -519,7 +585,7 @@ def make_pick_fn(
         cands = open_range(state)
         if not cands:
             return None
-        history = [{"commit": sha} for sha in state.tested_order]
+        history = bisect_history(state)
         decision = orch.pick_commit(
             cands,
             messages=messages,
@@ -542,7 +608,11 @@ def make_extra_runs_fn(
     """Adapt ``extra_runs`` to bisect's ``ExtraRunsFn``."""
 
     def extra(commit_sha: str, runs_used: int, verdict: Verdict) -> int:
-        midpoint = (verdict.lo + verdict.hi) / 2.0
+        midpoint = (
+            verdict.midpoint
+            if verdict.midpoint is not None
+            else (verdict.lo + verdict.hi) / 2.0
+        )
         decision = orch.extra_runs(
             current_runs=runs_used,
             max_runs=max_runs,
@@ -560,6 +630,7 @@ def make_propose_fn(
     knob_space: Mapping[str, Sequence[Any]],
     baseline: Mapping[str, Any] | str | None = None,
     metric: str = "output_throughput",
+    hardware: str = "",
 ) -> Callable[[Mapping[str, Any], list[CandidateRecord]], KnobProposal | None]:
     """Adapt ``propose_config`` to tune's ``ProposeFn``.
 
@@ -567,7 +638,10 @@ def make_propose_fn(
     decision has a call path. ``Decision`` ``None`` stays ``None`` (stop).
     """
     space = dict(knob_space)
-    knob_order = orch.rank_knobs(space, baseline=baseline or "", metric=metric).value
+    constraints = hardware_note(hardware)
+    knob_order = orch.rank_knobs(
+        space, baseline=baseline or "", metric=metric, constraints=constraints
+    ).value
 
     def propose(
         best: Mapping[str, Any], candidates: list[CandidateRecord]
@@ -577,7 +651,12 @@ def make_propose_fn(
             if record.config:
                 tried.add(config_key(dict(record.config)))
         decision = orch.propose_config(
-            space, tried=tried, knob_order=knob_order, best=best
+            space,
+            tried=tried,
+            knob_order=knob_order,
+            best=best,
+            history=candidate_history(candidates),
+            constraints=constraints,
         )
         if decision.value is None:
             return None

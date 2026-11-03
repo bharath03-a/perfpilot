@@ -66,10 +66,11 @@ def commit_table(
 
 def history_table(rows: Sequence[Mapping[str, Any]]) -> str:
     """Compact commit/runs/effect/interval table; never raw logs."""
-    out = ["commit | runs | effect | interval"]
+    out = ["commit | runs | effect | interval | label"]
     for r in rows:
         out.append(
             f"{r.get('commit', '?')} | {r.get('runs', '?')} | "
-            f"{r.get('effect', '?')} | [{r.get('lo', '?')}, {r.get('hi', '?')}]"
+            f"{r.get('effect', '?')} | [{r.get('lo', '?')}, {r.get('hi', '?')}] | "
+            f"{r.get('label', '?')}"
         )
     return "\n".join(out)
