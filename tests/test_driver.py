@@ -411,3 +411,26 @@ def test_eval_aborts_when_gpu_changes_mid_run(tmp_path) -> None:
     events = (tmp_path / "gpu-swap" / "events.jsonl").read_text()
     assert "GPU changed mid-run" in events
     assert '"type": "culprit"' not in events
+
+
+def test_driver_passes_agent_pick_through(tmp_path) -> None:
+    commits = [f"c{i:02d}{'0' * 36}" for i in range(16)]
+    seen: list[int] = []
+
+    def pick(state):
+        from perfpilot.modes.bisect import open_range
+
+        cands = open_range(state)
+        seen.append(len(cands))
+        return cands[0] if cands else None
+
+    summary = drive_eval_trial(
+        commits,
+        culprit_index=9,
+        inject_kind="enforce_eager",
+        make_measure=_fake_factory(3800.0, 0.20, seed=7),
+        run_id="test-eval-pick",
+        runs_root=str(tmp_path),
+        pick=pick,
+    )
+    assert seen and summary["correct"]

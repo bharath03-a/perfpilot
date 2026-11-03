@@ -335,24 +335,82 @@ def demo(
     typer.echo(f"replayed {len(staged)} events -> {scratch}/report.html")
 
 
+def _eval_commits(cfg: PerfPilotConfig, commits_from: Path | None) -> list[str]:
+    """Frozen range from a past run (reuses cached venvs) or the live range."""
+    if commits_from is None:
+        from perfpilot.git_info import wheeled_range
+
+        return wheeled_range(cfg.bisect.repo, 16)
+    import yaml
+
+    data = yaml.safe_load((commits_from / "config.yaml").read_text()) or {}
+    commits = [str(c) for c in data.get("commits", [])]
+    if len(commits) < 3:
+        typer.echo(f"error: {commits_from}/config.yaml has no commit range", err=True)
+        raise typer.Exit(code=2)
+    return commits
+
+
+def _eval_agent(agent: str, cfg: PerfPilotConfig, run_id: str, commits: list[str]):
+    """(pick, extra_runs) for an eval trial; (None, None) means fallbacks."""
+    if agent == "none":
+        return None, None
+    from perfpilot.orchestrator import make_extra_runs_fn, make_pick_fn
+
+    orch = _make_orchestrator(cfg, run_id, Path("runs") / run_id)
+    if orch is None:
+        return None, None
+    messages: dict[str, str] = {}
+    try:
+        from perfpilot.git_info import commit_infos_between
+
+        infos = commit_infos_between(cfg.bisect.repo, commits[0], commits[-1])
+        messages = {c.sha: c.message for c in infos}
+    except Exception as exc:  # noqa: BLE001 - messages are optional context
+        typer.echo(f"warning: commit messages unavailable ({exc}); continuing")
+    extra = make_extra_runs_fn(orch, max_runs=cfg.stats.max_runs)
+    if agent == "single":
+        return make_pick_fn(orch, metric=cfg.metrics.primary, messages=messages), extra
+    from perfpilot.bench.live_roles import live_swarm
+
+    return live_swarm(orch, messages), extra
+
+
 @app.command()
 def eval(
     config: Path = typer.Option(Path("perfpilot.yaml"), "--config"),
     trials: int = typer.Option(2, "--trials"),
+    agent: str = typer.Option("swarm", "--agent", help="swarm | single | none"),
+    culprit: int | None = typer.Option(
+        None, "--culprit", min=1, help="Plant at this index (default: seeded)"
+    ),
+    commits_from: Path | None = typer.Option(
+        None, "--commits-from", help="Reuse a past run's frozen range"
+    ),
 ) -> None:
-    """Seeded injected-regression eval: 2 trials, first+last culprits (M3)."""
-    from perfpilot.git_info import wheeled_range
+    """Planted-culprit eval on Modal; the agent never sees the plant."""
+    from perfpilot.evals.run_eval import seeded_culprit_positions
     from perfpilot.modes.driver import drive_eval_trial, modal_measure_factory
 
+    if agent not in ("swarm", "single", "none"):
+        typer.echo("error: --agent must be swarm, single or none", err=True)
+        raise typer.Exit(code=2)
     cfg = _load(config)
     wl = _workload_dict(cfg)
-    from perfpilot.evals.run_eval import seeded_culprit_positions
-
-    commits = wheeled_range(cfg.bisect.repo, 16)
+    commits = _eval_commits(cfg, commits_from)
     # index 0 has no clean in-range baseline; see README "Known limitation"
-    positions = seeded_culprit_positions(max(trials, 1), len(commits))
+    positions = (
+        [culprit] * max(trials, 1)
+        if culprit is not None
+        else seeded_culprit_positions(max(trials, 1), len(commits))
+    )
+    if any(pos >= len(commits) for pos in positions):
+        typer.echo(f"error: --culprit must be < {len(commits)}", err=True)
+        raise typer.Exit(code=2)
     results = []
     for i, pos in enumerate(positions):
+        run_id = _run_id(f"eval-t{i}")
+        pick, extra = _eval_agent(agent, cfg, run_id, commits)
         summary = drive_eval_trial(
             commits,
             culprit_index=pos,
@@ -365,13 +423,17 @@ def eval(
                 inject_for,
                 record,
             ),
-            run_id=_run_id(f"eval-t{i}"),
+            run_id=run_id,
+            gpu_cost_per_hour=cfg.gpu_cost_per_hour,
+            pick=pick,
+            extra_runs=extra,
         )
         results.append(summary)
         typer.echo(
-            f"trial {i}: culprit={summary['culprit']} "
+            f"trial {i} [{agent}]: culprit={summary['culprit']} "
             f"expected={summary['expected']} correct={summary['correct']} "
-            f"verified={summary['verified']} cost=${summary['cost_usd']:.2f}"
+            f"verified={summary['verified']} probes={summary['n_trials']} "
+            f"cost=${summary['cost_usd']:.2f} -> {summary['run_dir']}"
         )
     typer.echo(f"{sum(r['correct'] for r in results)}/{len(results)} correct")
 
@@ -386,6 +448,7 @@ def bench(
     record: bool = typer.Option(False, "--record", help="Append to scoreboard"),
     board: Path = typer.Option(Path("bench/scoreboard.jsonl"), "--board"),
     suite: str = typer.Option("all", "--suite", help="core | stress | all"),
+    export: Path | None = typer.Option(None, "--export", help="Write JSON for docs"),
 ) -> None:
     """Score agent variants on a simulated GPU ($0 GPU). Tracks progress."""
     import subprocess
@@ -425,6 +488,12 @@ def bench(
             or "unknown"
         )
         append_entry(board, summary, git_sha=sha, mode=mode)
+    if export is not None:
+        from perfpilot.bench.export import export_bench
+
+        meta = {"mode": mode, "seeds": seeds, "scenarios": len(suites[suite])}
+        export_bench(export, summary, load_entries(board), meta)
+        typer.echo(f"exported -> {export}")
     for v in chosen:
         rows = trend_rows(load_entries(board), variant=v, mode=mode)
         if rows:

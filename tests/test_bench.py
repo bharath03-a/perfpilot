@@ -189,3 +189,73 @@ def test_outlier_scenario_robust_across_seeds() -> None:
     sc = _scenario("outlier")
     misses = [s for s in range(40) if not run_scenario(sc, "fallback", s).correct]
     assert misses == []
+
+
+def test_bench_export_writes_cells(tmp_path: Path) -> None:
+    import json
+
+    from perfpilot.bench.export import export_bench
+
+    summary = run_suite(["fallback", "swarm"], seeds=1)
+    out = tmp_path / "bench.json"
+    export_bench(out, summary, [], {"mode": "scripted"})
+    data = json.loads(out.read_text())
+    assert {c["variant"] for c in data["cells"]} == {"fallback", "swarm"}
+    assert all("probes" in c and "family" in c for c in data["cells"])
+
+
+def test_hero_trace_reads_recorded_run(tmp_path: Path) -> None:
+    import json
+
+    from perfpilot.bench.export import hero_trace
+
+    run = tmp_path / "r1"
+    run.mkdir()
+    (run / "config.yaml").write_text("commits:\n- aaa\n- bbb\n- ccc\n")
+    events = [
+        {"type": "trial_result", "sha": "aaa", "runs": [10.0, 11.0]},
+        {"type": "trial_result", "sha": "ccc", "runs": [5.0, 5.5]},
+        {"type": "culprit", "sha": "bbb"},
+        {"type": "run_end", "status": "culprit"},
+    ]
+    (run / "events.jsonl").write_text("\n".join(json.dumps(e) for e in events))
+    t = hero_trace(run)
+    assert [p["idx"] for p in t["probes"]] == [0, 2]
+    assert t["culprit_idx"] == 1 and t["status"] == "culprit"
+
+
+def test_live_code_reader_confidence_must_be_grounded(tmp_path: Path) -> None:
+    from perfpilot.agent.client import SparkClient
+    from perfpilot.bench.live_roles import llm_role
+    from perfpilot.orchestrator import AgentOrchestrator
+
+    msgs = {
+        "a": "docs",
+        "b": "ci: bump",
+        "c": "[Scheduler] rework",
+        "d": "test",
+        "e": "x",
+    }
+    reply = '{"sha": "b", "confidence": "high", "reason": "gut feeling"}'
+    orch = AgentOrchestrator(
+        run_id="g",
+        events_path=tmp_path / "e.jsonl",
+        client=SparkClient(transport=lambda s, u: reply),
+    )
+    state = new_bisect_state(list("abcde")).model_copy(update={"bad_idx": 4})
+    vote = llm_role("code_reader", orch, msgs)(state, [])
+    assert vote.sha == "b" and vote.confidence == "low"
+
+
+def test_live_swarm_statistician_is_deterministic(tmp_path: Path) -> None:
+    from perfpilot.agent.client import SparkClient
+    from perfpilot.bench.live_roles import live_swarm
+    from perfpilot.orchestrator import AgentOrchestrator
+
+    orch = AgentOrchestrator(
+        run_id="g",
+        events_path=tmp_path / "e.jsonl",
+        client=SparkClient(transport=lambda s, u: "{}"),
+    )
+    names = [getattr(r, "__qualname__", "") for r in live_swarm(orch, {}).roles]
+    assert sum("llm_role" in n for n in names) == 1

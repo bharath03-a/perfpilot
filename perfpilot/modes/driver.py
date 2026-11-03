@@ -11,6 +11,7 @@ from collections.abc import Callable
 from typing import Any
 
 from perfpilot.modes import BisectOutcome, BisectParams, TrialOutcome, run_bisect
+from perfpilot.modes.bisect import ExtraRunsFn, PickFn
 from perfpilot.modes.tune import TuneOutcome, TuneParams, run_tuning
 from perfpilot.orchestrator import EventLog
 from perfpilot.report import render as render_mod
@@ -109,6 +110,8 @@ def drive_eval_trial(
     run_id: str,
     runs_root: str = "runs",
     gpu_cost_per_hour: float = 2.10,
+    pick: PickFn | None = None,
+    extra_runs: ExtraRunsFn | None = None,
 ) -> dict[str, Any]:
     """One planted-culprit trial. Returns the summary; culprit stays hidden."""
     from perfpilot.evals.inject import WORKER_INJECTS
@@ -155,7 +158,11 @@ def drive_eval_trial(
 
     # driver retries (and logs) itself; avoid stacking core retries on top
     outcome: BisectOutcome = run_bisect(
-        commits, measure, params=BisectParams(transient_retries=0)
+        commits,
+        measure,
+        params=BisectParams(transient_retries=0),
+        pick=pick,
+        extra_runs=extra_runs,
     )
     verdicts = []
     for sha in outcome.tested_order:
