@@ -38,7 +38,7 @@ tune --commit C → propose flags → measure → quality gate (50Q bank)
 | M4 tune + verify | GPU evaluated | 6 flag candidates, none beat baseline +2% (5 no-uplift, fp8 impossible on A100 recorded as rejection); baseline kept, quality held |
 | M5 report/watch/README | in progress | 7 recorded runs re-render; this file |
 
-Suite: **213 passed, 1 skipped**, `ruff check` + `format` clean.
+Suite: **218 passed, 1 skipped**, `ruff check` + `format` clean.
 
 ## Eval (local, fake transport)
 
@@ -211,6 +211,6 @@ Each run writes `runs/<id>/`: `config.yaml`, `events.jsonl`, `report.html`,
 
 Meta Global AI Developer Hackathon, Indie track (Push the Frontier) — all
 code in `perfpilot/` written this week on a clean layout (old scaffold
-deleted per plan). Evidence per milestone: 213-test suite, 11 recorded run
+deleted per plan). Evidence per milestone: 218-test suite, 11 recorded run
 reports under `runs/`, live GPU eval on Modal A100s, agent brain on Baseten.
 Full chronology in [PLAN.md](PLAN.md).

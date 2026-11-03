@@ -1,0 +1,47 @@
+{
+ "caption": "code_hint scenario, live muse-spark-open roles (seed 0): culprit 12 found exactly in 6 probes (2 picks + endpoints + verify) vs 9 for plain bisect. code_reader's high-confidence vote for commit 12 (message names the scheduler) outweighs two low-confidence votes; once 12 measures bad, the statistician probes its parent 11, which measures good: edge proven. Chips: each role's pick (last two digits) and confidence; green = chosen.",
+ "picks": [
+  {
+   "chosen": "code_hint-12",
+   "label": "measured bad",
+   "votes": [
+    {
+     "role": "bisector",
+     "sha": "code_hint-08",
+     "confidence": "low"
+    },
+    {
+     "role": "code_reader",
+     "sha": "code_hint-12",
+     "confidence": "high"
+    },
+    {
+     "role": "statistician",
+     "sha": "code_hint-07",
+     "confidence": "low"
+    }
+   ]
+  },
+  {
+   "chosen": "code_hint-11",
+   "label": "measured good",
+   "votes": [
+    {
+     "role": "bisector",
+     "sha": "code_hint-06",
+     "confidence": "low"
+    },
+    {
+     "role": "code_reader",
+     "sha": "code_hint-06",
+     "confidence": "low"
+    },
+    {
+     "role": "statistician",
+     "sha": "code_hint-11",
+     "confidence": "high"
+    }
+   ]
+  }
+ ]
+}

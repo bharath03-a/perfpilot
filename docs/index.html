@@ -3,169 +3,230 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PerfPilot — the agent that finds the commit that slowed your vLLM deployment</title>
-<meta name="description" content="PerfPilot: PerfBisect finds the first slow vLLM commit, TuneSmith recovers speed via serve flags. Every claim benchmark-verified with intervals.">
-<meta name="theme-color" content="#F7F7F2">
+<title>PerfPilot finds the commit that slowed vLLM</title>
+<meta name="description" content="PerfPilot bisects vLLM commits on an A100 to find the first slow one, proves it with a Welch interval, and tries serve flags to win speed back. An agent swarm proposes; benchmarks decide.">
+<meta name="theme-color" content="#EEF1F4">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/theme.css">
 </head>
 <body>
-<div class="wrap">
 
-  <header class="top">
-    <a class="brand" href="./"><img src="assets/logo.svg" alt="PerfPilot logo"><b>PerfPilot</b></a>
-    <nav>
-      <a href="#results">Results</a>
-      <a href="#reports">Reports</a>
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="./"><img src="assets/logo.svg" alt=""><span>PerfPilot</span></a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#how">How it works</a>
+      <a href="#evidence">GPU evidence</a>
+      <a href="#bench">Bench and swarm</a>
+      <a href="#reports">Run reports</a>
       <a href="architecture.html">Architecture</a>
-      <a class="cta" href="https://github.com/bharath03-a/perfpilot">GitHub</a>
+      <a class="gh" href="https://github.com/bharath03-a/perfpilot">GitHub</a>
     </nav>
-  </header>
-
-  <div class="hero">
-    <div>
-      <h1>The agent that finds the commit that <em>slowed your deployment</em> — and proves it.</h1>
-      <p class="lede">PerfPilot keeps a vLLM deployment of a Meta open model fast.
-      <b>PerfBisect</b> finds the first slow commit; <b>TuneSmith</b> tries to win
-      speed back with serve flags. The brain proposes — benchmarks dispose.
-      Every claim carries a statistical interval, or it doesn't ship.</p>
-    </div>
-    <div class="usage">
-      <p>$ try it — reports re-render offline</p>
-      <pre><span class="c"># find the culprit</span>
-perfpilot bisect --good G --bad B
-<span class="c"># recover speed</span>
-perfpilot tune --commit C
-<span class="c"># replay any run, no GPU needed</span>
-perfpilot demo runs/&lt;run-id&gt;</pre>
-    </div>
   </div>
+</header>
 
-  <div class="stats" role="list">
-    <div class="stat" role="listitem"><b>0</b><span>wrong verdicts on real A100 runs</span></div>
-    <div class="stat" role="listitem"><b>90%</b><span>Welch log-ratio interval on every claim</span></div>
-    <div class="stat" role="listitem"><b>$7.46</b><span>total metered GPU spend, stated per run</span></div>
-    <div class="stat" role="listitem"><b>213</b><span>pytest tests green, ruff clean</span></div>
-  </div>
+<main>
+  <div class="wrap">
+    <section class="hero" aria-labelledby="hero-title">
+      <h1 id="hero-title">Find the commit that slowed vLLM, and prove it.</h1>
+      <p class="lead">PerfPilot bisects a vLLM commit range on a real A100, measures throughput at each step, and names the first slow commit with a 90% interval. A small swarm of agents on Meta's open model picks where to look; the benchmarks decide.</p>
+    </section>
 
-  <section class="block" id="how">
-    <h2>Two planes</h2>
-    <p class="sub">A free local control plane decides and proves; a metered Modal A100 plane only measures. The Baseten brain only advises.</p>
-    <div class="planes">
-      <div class="plane free">
-        <span class="tag">$0 · local</span>
-        <h3>Control plane</h3>
-        <p>Bisect driver, Welch-interval stats, TuneSmith, HTML reports. Every agent proposal is schema-validated with a deterministic fallback — runs complete with no key.</p>
-      </div>
-      <div class="plane metered">
-        <span class="tag">$2.10/h · Modal A100-40GB</span>
-        <h3>Measurement plane</h3>
-        <p>One warm container serves one commit's wheel at a time; pinned GPU, same-UUID enforced, failed requests invalidate the run. Trials are the only spend.</p>
+    <div class="cliff">
+      <div class="cliff-inner">
+        <div id="cliff-svg"></div>
+        <div class="cliff-caption">
+          <span class="key"><i style="background:#1F5FBF"></i>fast run</span>
+          <span class="key"><i style="background:#C8323C"></i>slow run</span>
+          <span class="key"><i style="background:#E3ECF8;outline:1px solid #1F5FBF"></i>suspect range</span>
+          <span id="cliff-status" role="status">Loading a recorded run…</span>
+          <button class="cliff-replay" id="cliff-replay" type="button">Replay the bisect</button>
+        </div>
       </div>
     </div>
-  </section>
 
-  <section class="block" id="video">
-    <h2>Demo</h2>
-    <p class="sub">Three minutes: the cliff, the narrowing, the honest negative. Recorded runs only — no live GPU was harmed.</p>
-    <div class="video-frame" id="video-slot"></div>
-  </section>
+    <dl class="facts">
+      <div><dt>0</dt><dd>wrong verdicts, on A100 runs and across 17 benchmark scenarios</dd></div>
+      <div><dt>17</dt><dd>failure scenarios replayed for $0 on every change</dd></div>
+      <div><dt>$7.46</dt><dd>total GPU spend so far, stated per run</dd></div>
+      <div><dt>218</dt><dd>tests passing, lint clean</dd></div>
+    </dl>
 
-  <section class="block" id="results">
-    <h2>Results</h2>
-    <p class="sub">Headline invariant: 0 wrong verdicts, every claim carries an interval, cost stated per run. Local ($0, fake transport) and GPU tables are different instruments — never merged.</p>
-    <figure class="report-frame" style="padding:1rem">
-      <img src="assets/cliff.svg" alt="Per-run throughput in m2-eval-9: clean baseline near 3590, one collapsed run at 1703, injected commits near 1190" style="width:100%;height:auto;display:block">
-    </figure>
-    <p class="report-meta">Every measured run of m2-eval-9, in order. The red point is the collapsed run that poisoned the baseline — caught, fixed, and regression-tested (<code>baseline_max_spread</code>).</p>
-    <h3>GPU eval · Modal A100-40GB · $5.86</h3>
-    <table class="data">
-      <tr><th>Trial</th><th>Planted</th><th>Verdict</th><th>Reading</th></tr>
-      <tr><td>m2-eval-9</td><td>strong overlay, commit 1 of 16</td><td>15-wide range, culprit inside, unverified</td><td>Correct by inclusion. One collapsed baseline run ([3569, 3594, 1703] tok/s) poisoned variance → fixed with endpoint re-measure, regression-tested.</td></tr>
-      <tr><td>m2-eval-10</td><td>mild overlay, last commit</td><td><code>no_regression</code></td><td>Correct: the overlay measured −0.8%, so there was no regression to find. Overlay dropped per the ≥10% keep rule.</td></tr>
-      <tr><td>m2-eval-11</td><td>strong overlay, commit 1 of 16 (fixed driver)</td><td>2-wide range, culprit inside, unverified</td><td>Same config as trial 0: converged in 11 probes at $1.23 — the baseline fix validated on a real A100.</td></tr>
-    </table>
-    <br>
-    <h3>Tune · $1.60 · honest negative</h3>
-    <table class="data">
-      <tr><th>Candidates</th><th>Outcome</th></tr>
-      <tr><td>prefix-caching, batch-tokens 8k/16k, async scheduling, fp8 KV, seqs-256</td><td>Five cleared nothing above the +2% interval bar; fp8 can't run on A100 and was logged as a rejection. Baseline kept, quality held.</td></tr>
-    </table>
-  </section>
+    <section class="block" id="how" aria-labelledby="how-title">
+      <header>
+        <h2 id="how-title">How a bisect runs</h2>
+        <p class="lead">You give it a good commit and a bad one. It returns the culprit, the size of the slowdown with an interval, and what the GPU time cost.</p>
+      </header>
+      <ol class="flow">
+        <li><b>Confirm the slowdown</b><span>Measure both ends three times. Stop unless the bad end is at least 3% slower with 90% confidence.</span></li>
+        <li><b>Pick the next commit</b><span>Three agents vote: one halves the range, one reads commit messages, one confirms an edge. A fixed referee decides.</span></li>
+        <li><b>Measure and classify</b><span>Benchmark that commit on the A100. A Welch interval labels it fast, slow, or unclear; unclear earns more runs.</span></li>
+        <li><b>Verify and report</b><span>Re-measure the culprit against its parent, then write a report anyone can re-render offline.</span></li>
+      </ol>
+      <div class="planes">
+        <div class="plane">
+          <h3>Decides locally</h3>
+          <p><span class="cost">$0.</span> Bisect driver, statistics, agent orchestration and reports run on your laptop. Every agent answer is schema-checked; a bad or missing answer falls back to a deterministic choice, so runs finish without a key.</p>
+        </div>
+        <div class="plane metered">
+          <h3>Measures on Modal</h3>
+          <p><span class="cost">$2.10 an hour.</span> One warm A100-40GB serves each commit's vLLM build. The GPU is pinned and re-checked on every trial; benchmark runs are the only thing that costs money.</p>
+        </div>
+      </div>
+      <div class="usage" aria-label="Commands">
+<pre><span class="c"># find the culprit between two commits</span>
+perfpilot bisect --good &lt;sha&gt; --bad &lt;sha&gt;
+<span class="c"># try serve flags to win speed back</span>
+perfpilot tune --commit &lt;sha&gt;
+<span class="c"># score the agents on 17 scenarios, no GPU</span>
+perfpilot bench --suite all --seeds 20</pre>
+      </div>
+    </section>
 
-  <section class="block" id="reports">
-    <h2>Recorded reports</h2>
-    <p class="sub">The actual run artifacts, embedded. Verdict card, bisect timeline, throughput chart, agent proposal log, reproducibility block.</p>
-    <div class="tabs" role="tablist" aria-label="Recorded runs">
-      <button role="tab" aria-selected="true" data-run="m2-eval-9">m2-eval-9 · bisect</button>
-      <button role="tab" aria-selected="false" data-run="m2-eval-10">m2-eval-10 · bisect</button>
-      <button role="tab" aria-selected="false" data-run="m2-eval-11">m2-eval-11 · bisect</button>
-      <button role="tab" aria-selected="false" data-run="tune-20261101-150900">tune · flags</button>
-    </div>
-    <div class="report-frame">
-      <iframe id="report-view" title="Recorded PerfPilot run report" src="runs/m2-eval-9/report.html"></iframe>
-    </div>
-    <p class="report-meta" id="report-meta"></p>
-  </section>
+    <section class="block" id="evidence" aria-labelledby="evidence-title">
+      <header>
+        <h2 id="evidence-title">What happened on real GPUs</h2>
+        <p class="lead">Each trial plants a known slowdown (<code>--enforce-eager</code>) at a hidden commit in a frozen 16-commit range. The agents never see where.</p>
+      </header>
+      <div class="table-scroll">
+        <table class="data" id="gpu-table">
+          <tr><th>Run</th><th>Planted at</th><th>Verdict</th><th>Cost</th><th>What it showed</th></tr>
+          <tr><td><a href="runs/m2-eval-9/report.html">m2-eval-9</a></td><td>commit 1</td><td>range of 15, culprit inside</td><td>$3.32</td><td>One collapsed baseline run (1,703 against ~3,590 tok/s) poisoned the variance. Fixed by re-measuring noisy endpoints.</td></tr>
+          <tr><td><a href="runs/m2-eval-10/report.html">m2-eval-10</a></td><td>last commit, mild</td><td>no regression</td><td>$1.31</td><td>Correct: the mild slowdown measured −0.8%, below the 3% floor, so there was nothing to find.</td></tr>
+          <tr><td><a href="runs/m2-eval-11/report.html">m2-eval-11</a></td><td>commit 1</td><td>range of 2, culprit inside</td><td>$1.23</td><td>Same setup as m2-eval-9 after the fix: 11 measurements instead of 26.</td></tr>
+        </table>
+      </div>
+      <h3>Tuning serve flags</h3>
+      <p>Six flag changes on one commit: prefix caching, two batch-token budgets, async scheduling, FP8 KV cache, 256 sequences. None beat the baseline by the required 2%; FP8 can't run on an A100 and was rejected. Baseline kept, answer quality held, $1.60. <a href="runs/tune-20261101-150900/report.html">Open the tuning report</a>.</p>
+    </section>
 
-  <section class="block" id="eligibility">
-    <h2>Hackathon eligibility</h2>
-    <ul class="ticks">
-      <li><b>Open weights throughout:</b> measured model <code>meta-llama/Llama-3.2-1B</code>, agent brain <code>meta-models/muse-spark-open-1026</code> on Baseten.</li>
-      <li><b>Agentic loop:</b> brain proposes, driver measures, stats disposes — accepted/rejected proposal log in every run's <code>events.jsonl</code>.</li>
-      <li><b>Built during the event:</b> Indie track, Push the Frontier. All code in <code>perfpilot/</code> written this week on a clean layout.</li>
-    </ul>
-  </section>
+    <section class="block" id="bench" aria-labelledby="bench-title">
+      <header>
+        <h2 id="bench-title">Bench and agent swarm</h2>
+        <p class="lead"><code>perfpilot bench</code> runs the real bisect driver against a simulated A100 with noise, collapsed runs, preempted workers, broken builds and drift. It scores three ways of picking commits across 17 scenarios and 20 seeds, and logs the score for each git commit.</p>
+      </header>
+      <div class="swarm" aria-label="Three agents vote, a referee picks, the bisect driver validates">
+        <div class="role"><b>bisector</b><span>Halves the open range.</span></div>
+        <div class="role"><b>code_reader</b><span>Flags messages that touch hot paths. Stays quiet when every commit matches.</span></div>
+        <div class="role"><b>statistician</b><span>When a flagged commit is slow, tests its parent to pin the edge.</span></div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="gate"><b>referee</b><span>Adds up confidence-weighted votes; ties go to the most even split.</span></div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="gate"><b>bisect driver</b><span>Validates every pick. Agents can waste a measurement, never change a verdict.</span></div>
+      </div>
 
-  <footer>
+      <h3>Scores, 20 seeds × 17 scenarios</h3>
+      <div class="table-scroll"><table class="data" id="bench-variants"></table></div>
+      <p class="note">Score = 100 × correct − 200 × wrong − 2 × measurements, averaged per run. Exact is below 100% only where a range is the honest answer: broken builds next to the culprit, and 5% slowdowns at the run cap.</p>
+
+      <h3>Every scenario</h3>
+      <div id="bench-heat" class="heat-wrap"></div>
+
+      <h3>Bugs the bench found</h3>
+      <p>Each one is replayed as a regression test from the exact seeds or numbers that broke it.</p>
+      <div class="legend-inline"><span><i style="background:#C8323C"></i>before</span><span><i style="background:#1F5FBF"></i>after</span></div>
+      <div id="bench-fixes" class="viz-row"></div>
+
+      <h3>The swarm on the live Baseten model</h3>
+      <div id="bench-votes"></div>
+      <div id="bench-live"></div>
+      <div id="bench-trend"></div>
+    </section>
+
+    <section class="block" id="reports" aria-labelledby="reports-title">
+      <header>
+        <h2 id="reports-title">Run reports</h2>
+        <p class="lead">The actual artifacts from each run: verdict, bisect timeline, throughput chart, agent decisions and how to reproduce it.</p>
+      </header>
+      <div class="tabs" role="tablist" aria-label="Recorded runs">
+        <button role="tab" aria-selected="true" data-run="m2-eval-11">m2-eval-11 bisect</button>
+        <button role="tab" aria-selected="false" data-run="m2-eval-9">m2-eval-9 bisect</button>
+        <button role="tab" aria-selected="false" data-run="m2-eval-10">m2-eval-10 bisect</button>
+        <button role="tab" aria-selected="false" data-run="tune-20261101-150900">Flag tuning</button>
+      </div>
+      <div class="report-frame">
+        <iframe id="report-view" title="Recorded PerfPilot run report" src="runs/m2-eval-11/report.html" loading="lazy"></iframe>
+      </div>
+      <p class="report-meta" id="report-meta"></p>
+    </section>
+
+    <section class="block" id="video" aria-labelledby="video-title">
+      <header><h2 id="video-title">Demo</h2></header>
+      <div class="video-frame" id="video-slot"></div>
+    </section>
+
+    <section class="block" id="eligibility" aria-labelledby="elig-title">
+      <header><h2 id="elig-title">Hackathon checklist</h2></header>
+      <ul class="ticks">
+        <li><b>Open weights end to end.</b> Measured model <code>meta-llama/Llama-3.2-1B</code>; agents run on <code>meta-models/muse-spark-open-1026</code> on Baseten.</li>
+        <li><b>A real agent loop.</b> Agents propose, the driver measures, statistics decide. Every proposal, accepted or rejected, is logged with its reason.</li>
+        <li><b>Built this week.</b> Indie track, Push the Frontier. All code in <code>perfpilot/</code> was written during the event.</li>
+      </ul>
+    </section>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
     <img src="assets/logo.svg" alt="">
-    <span>PerfPilot · Meta Global AI Developer Hackathon, Indie (Push the Frontier)</span>
+    <span>PerfPilot, Meta Global AI Developer Hackathon, Indie track</span>
     <span class="spacer"></span>
-    <a href="https://github.com/bharath03-a/perfpilot">Repo</a>
     <a href="architecture.html">Architecture</a>
-  </footer>
+    <a href="https://github.com/bharath03-a/perfpilot">Source on GitHub</a>
+  </div>
+</footer>
 
-</div>
 <script>
 (function () {
-  // Paste the YouTube video ID here when the demo is uploaded.
   var VIDEO_ID = "";
   var slot = document.getElementById("video-slot");
   if (VIDEO_ID) {
     var f = document.createElement("iframe");
     f.src = "https://www.youtube-nocookie.com/embed/" + VIDEO_ID;
     f.title = "PerfPilot demo video";
-    f.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
+    f.allow = "accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture";
     f.allowFullscreen = true;
     slot.appendChild(f);
   } else {
-    slot.innerHTML = '<div class="video-soon"><img src="assets/logo.svg" alt="">' +
-      "<p>VIDEO WALKTHROUGH — COMING SOON</p></div>";
+    slot.textContent = "The walkthrough video will be posted here.";
   }
 
   var META = {
-    "m2-eval-9": "26 probes · culprit e5196e29 · regression −60.1% (derived) · unverified · $3.32 — <a href=\"runs/m2-eval-9/report.html\">open full page</a> · <a href=\"runs/m2-eval-9/events.jsonl\">events.jsonl</a>",
-    "m2-eval-10": "correct no_regression · mild overlay measured −0.8% · $1.31 — <a href=\"runs/m2-eval-10/report.html\">open full page</a> · <a href=\"runs/m2-eval-10/events.jsonl\">events.jsonl</a>",
-    "m2-eval-11": "2-wide range, culprit inside · 11 probes · $1.23 · baseline fix validated — <a href=\"runs/m2-eval-11/report.html\">open full page</a> · <a href=\"runs/m2-eval-11/events.jsonl\">events.jsonl</a>",
-    "tune-20261101-150900": "6 candidates · baseline kept · quality held · ~$1.60 — <a href=\"runs/tune-20261101-150900/report.html\">open full page</a> · <a href=\"runs/tune-20261101-150900/events.jsonl\">events.jsonl</a>"
+    "m2-eval-9": "26 measurements, culprit range of 15, $3.32.",
+    "m2-eval-10": "No regression: the planted slowdown measured −0.8%. $1.31.",
+    "m2-eval-11": "11 measurements, culprit range of 2, $1.23.",
+    "tune-20261101-150900": "6 flag candidates, baseline kept, quality held, about $1.60."
   };
   var view = document.getElementById("report-view");
   var meta = document.getElementById("report-meta");
+  var buttons = document.querySelectorAll(".tabs button");
   function select(run, btn) {
     view.src = "runs/" + run + "/report.html";
-    meta.innerHTML = META[run];
-    document.querySelectorAll(".tabs button").forEach(function (b) {
-      b.setAttribute("aria-selected", b === btn ? "true" : "false");
-    });
+    meta.textContent = (META[run] || "") + " ";
+    var a = document.createElement("a");
+    a.href = "runs/" + run + "/report.html";
+    a.textContent = "Open full page";
+    meta.appendChild(a);
+    buttons.forEach(function (b) { b.setAttribute("aria-selected", b === btn ? "true" : "false"); });
   }
-  document.querySelectorAll(".tabs button").forEach(function (b) {
-    b.addEventListener("click", function () { select(b.dataset.run, b); });
-  });
-  meta.innerHTML = META["m2-eval-9"];
+  buttons.forEach(function (b) { b.addEventListener("click", function () { select(b.dataset.run, b); }); });
+  select(buttons[0].dataset.run, buttons[0]);
+
+  var links = document.querySelectorAll('.nav-links a[href^="#"]');
+  var targets = Array.prototype.map.call(links, function (a) { return document.querySelector(a.getAttribute("href")); });
+  function mark() {
+    var current = null;
+    targets.forEach(function (t, i) { if (t && t.getBoundingClientRect().top < 120) current = i; });
+    links.forEach(function (a, i) { a.setAttribute("aria-current", i === current ? "true" : "false"); });
+  }
+  window.addEventListener("scroll", mark, { passive: true });
+  mark();
 })();
 </script>
+<script src="assets/hero.js" defer></script>
+<script src="assets/bench.js" defer></script>
 </body>
 </html>

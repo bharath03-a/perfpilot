@@ -1,0 +1,830 @@
+{
+ "meta": {
+  "mode": "scripted-all",
+  "seeds": 20,
+  "scenarios": 17
+ },
+ "variants": [
+  {
+   "variant": "fallback",
+   "n": 340,
+   "correct_rate": 1.0,
+   "exact_rate": 0.906,
+   "wrong": 0,
+   "mean_probes": 8.74,
+   "mean_cost_usd": 1.728,
+   "score": 82.53
+  },
+  {
+   "variant": "single",
+   "n": 340,
+   "correct_rate": 1.0,
+   "exact_rate": 0.906,
+   "wrong": 0,
+   "mean_probes": 8.79,
+   "mean_cost_usd": 1.737,
+   "score": 82.42
+  },
+  {
+   "variant": "swarm",
+   "n": 340,
+   "correct_rate": 1.0,
+   "exact_rate": 0.906,
+   "wrong": 0,
+   "mean_probes": 8.61,
+   "mean_cost_usd": 1.709,
+   "score": 82.78
+  }
+ ],
+ "cells": [
+  {
+   "scenario": "clean_strong",
+   "variant": "fallback",
+   "family": "core",
+   "description": "40% drop, low noise: the baseline case",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.1,
+   "cost_usd": 1.907
+  },
+  {
+   "scenario": "mild",
+   "variant": "fallback",
+   "family": "core",
+   "description": "12% drop near the bad end",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.3,
+   "cost_usd": 1.943
+  },
+  {
+   "scenario": "noisy",
+   "variant": "fallback",
+   "family": "core",
+   "description": "25% drop under 4% run-to-run noise",
+   "n": 20,
+   "correct": 20,
+   "exact": 19,
+   "wrong": 0,
+   "probes": 11.55,
+   "cost_usd": 2.28
+  },
+  {
+   "scenario": "outlier",
+   "variant": "fallback",
+   "family": "core",
+   "description": "Culprit at index 1 with collapsed-run outliers (trial-0 failure)",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 10.7,
+   "cost_usd": 2.163
+  },
+  {
+   "scenario": "code_hint",
+   "variant": "fallback",
+   "family": "core",
+   "description": "Culprit message names a hot path the workload exercises",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.0,
+   "cost_usd": 1.89
+  },
+  {
+   "scenario": "misleading_hint",
+   "variant": "fallback",
+   "family": "core",
+   "description": "A hot-path message on an innocent commit; real culprit is bland",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.2,
+   "cost_usd": 1.925
+  },
+  {
+   "scenario": "no_regression",
+   "variant": "fallback",
+   "family": "core",
+   "description": "Endpoints equal: the only right answer is no_regression",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 2.0,
+   "cost_usd": 0.35
+  },
+  {
+   "scenario": "two_culprits",
+   "variant": "fallback",
+   "family": "stress",
+   "description": "Two stacked regressions (20% at 4, 25% at 11); either is right",
+   "n": 20,
+   "correct": 20,
+   "exact": 18,
+   "wrong": 0,
+   "probes": 10.5,
+   "cost_usd": 2.096
+  },
+  {
+   "scenario": "broken_builds",
+   "variant": "fallback",
+   "family": "stress",
+   "description": "Commits next to the culprit fail to build",
+   "n": 20,
+   "correct": 20,
+   "exact": 0,
+   "wrong": 0,
+   "probes": 9.0,
+   "cost_usd": 1.435
+  },
+  {
+   "scenario": "flaky_worker",
+   "variant": "fallback",
+   "family": "stress",
+   "description": "10% of trials die (preemption/OOM) with a transient error",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 10.3,
+   "cost_usd": 1.981
+  },
+  {
+   "scenario": "rig_drift",
+   "variant": "fallback",
+   "family": "stress",
+   "description": "GPU slows 0.6% per probe (thermal/neighbour); 15% real drop",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.0,
+   "cost_usd": 1.89
+  },
+  {
+   "scenario": "borderline",
+   "variant": "fallback",
+   "family": "stress",
+   "description": "5% drop under 1.5% noise: just above the 3% floor",
+   "n": 20,
+   "correct": 20,
+   "exact": 11,
+   "wrong": 0,
+   "probes": 17.65,
+   "cost_usd": 3.078
+  },
+  {
+   "scenario": "transient_regression",
+   "variant": "fallback",
+   "family": "stress",
+   "description": "Regressed at 4, fixed at 10: endpoints equal, no regression",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 2.0,
+   "cost_usd": 0.35
+  },
+  {
+   "scenario": "speedup",
+   "variant": "fallback",
+   "family": "stress",
+   "description": "Range got 20% faster: an improvement is not a regression",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 2.0,
+   "cost_usd": 0.35
+  },
+  {
+   "scenario": "wide_range",
+   "variant": "fallback",
+   "family": "stress",
+   "description": "64-commit range, culprit at 37",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 11.1,
+   "cost_usd": 2.258
+  },
+  {
+   "scenario": "hint_spam",
+   "variant": "fallback",
+   "family": "stress",
+   "description": "Every message mentions a hot path: hints carry no signal",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.1,
+   "cost_usd": 1.907
+  },
+  {
+   "scenario": "culprit_last",
+   "variant": "fallback",
+   "family": "stress",
+   "description": "Culprit is the bad endpoint's own commit",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 7.0,
+   "cost_usd": 1.575
+  },
+  {
+   "scenario": "clean_strong",
+   "variant": "single",
+   "family": "core",
+   "description": "40% drop, low noise: the baseline case",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.1,
+   "cost_usd": 1.907
+  },
+  {
+   "scenario": "mild",
+   "variant": "single",
+   "family": "core",
+   "description": "12% drop near the bad end",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.3,
+   "cost_usd": 1.943
+  },
+  {
+   "scenario": "noisy",
+   "variant": "single",
+   "family": "core",
+   "description": "25% drop under 4% run-to-run noise",
+   "n": 20,
+   "correct": 20,
+   "exact": 19,
+   "wrong": 0,
+   "probes": 11.55,
+   "cost_usd": 2.28
+  },
+  {
+   "scenario": "outlier",
+   "variant": "single",
+   "family": "core",
+   "description": "Culprit at index 1 with collapsed-run outliers (trial-0 failure)",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 10.7,
+   "cost_usd": 2.163
+  },
+  {
+   "scenario": "code_hint",
+   "variant": "single",
+   "family": "core",
+   "description": "Culprit message names a hot path the workload exercises",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.0,
+   "cost_usd": 1.89
+  },
+  {
+   "scenario": "misleading_hint",
+   "variant": "single",
+   "family": "core",
+   "description": "A hot-path message on an innocent commit; real culprit is bland",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 10.1,
+   "cost_usd": 2.083
+  },
+  {
+   "scenario": "no_regression",
+   "variant": "single",
+   "family": "core",
+   "description": "Endpoints equal: the only right answer is no_regression",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 2.0,
+   "cost_usd": 0.35
+  },
+  {
+   "scenario": "two_culprits",
+   "variant": "single",
+   "family": "stress",
+   "description": "Two stacked regressions (20% at 4, 25% at 11); either is right",
+   "n": 20,
+   "correct": 20,
+   "exact": 18,
+   "wrong": 0,
+   "probes": 10.5,
+   "cost_usd": 2.096
+  },
+  {
+   "scenario": "broken_builds",
+   "variant": "single",
+   "family": "stress",
+   "description": "Commits next to the culprit fail to build",
+   "n": 20,
+   "correct": 20,
+   "exact": 0,
+   "wrong": 0,
+   "probes": 9.0,
+   "cost_usd": 1.435
+  },
+  {
+   "scenario": "flaky_worker",
+   "variant": "single",
+   "family": "stress",
+   "description": "10% of trials die (preemption/OOM) with a transient error",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 10.3,
+   "cost_usd": 1.981
+  },
+  {
+   "scenario": "rig_drift",
+   "variant": "single",
+   "family": "stress",
+   "description": "GPU slows 0.6% per probe (thermal/neighbour); 15% real drop",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.0,
+   "cost_usd": 1.89
+  },
+  {
+   "scenario": "borderline",
+   "variant": "single",
+   "family": "stress",
+   "description": "5% drop under 1.5% noise: just above the 3% floor",
+   "n": 20,
+   "correct": 20,
+   "exact": 11,
+   "wrong": 0,
+   "probes": 17.65,
+   "cost_usd": 3.078
+  },
+  {
+   "scenario": "transient_regression",
+   "variant": "single",
+   "family": "stress",
+   "description": "Regressed at 4, fixed at 10: endpoints equal, no regression",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 2.0,
+   "cost_usd": 0.35
+  },
+  {
+   "scenario": "speedup",
+   "variant": "single",
+   "family": "stress",
+   "description": "Range got 20% faster: an improvement is not a regression",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 2.0,
+   "cost_usd": 0.35
+  },
+  {
+   "scenario": "wide_range",
+   "variant": "single",
+   "family": "stress",
+   "description": "64-commit range, culprit at 37",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 11.1,
+   "cost_usd": 2.258
+  },
+  {
+   "scenario": "hint_spam",
+   "variant": "single",
+   "family": "stress",
+   "description": "Every message mentions a hot path: hints carry no signal",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.1,
+   "cost_usd": 1.907
+  },
+  {
+   "scenario": "culprit_last",
+   "variant": "single",
+   "family": "stress",
+   "description": "Culprit is the bad endpoint's own commit",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 7.0,
+   "cost_usd": 1.575
+  },
+  {
+   "scenario": "clean_strong",
+   "variant": "swarm",
+   "family": "core",
+   "description": "40% drop, low noise: the baseline case",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.1,
+   "cost_usd": 1.907
+  },
+  {
+   "scenario": "mild",
+   "variant": "swarm",
+   "family": "core",
+   "description": "12% drop near the bad end",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.3,
+   "cost_usd": 1.943
+  },
+  {
+   "scenario": "noisy",
+   "variant": "swarm",
+   "family": "core",
+   "description": "25% drop under 4% run-to-run noise",
+   "n": 20,
+   "correct": 20,
+   "exact": 19,
+   "wrong": 0,
+   "probes": 11.55,
+   "cost_usd": 2.28
+  },
+  {
+   "scenario": "outlier",
+   "variant": "swarm",
+   "family": "core",
+   "description": "Culprit at index 1 with collapsed-run outliers (trial-0 failure)",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 10.7,
+   "cost_usd": 2.163
+  },
+  {
+   "scenario": "code_hint",
+   "variant": "swarm",
+   "family": "core",
+   "description": "Culprit message names a hot path the workload exercises",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 6.0,
+   "cost_usd": 1.4
+  },
+  {
+   "scenario": "misleading_hint",
+   "variant": "swarm",
+   "family": "core",
+   "description": "A hot-path message on an innocent commit; real culprit is bland",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 10.1,
+   "cost_usd": 2.083
+  },
+  {
+   "scenario": "no_regression",
+   "variant": "swarm",
+   "family": "core",
+   "description": "Endpoints equal: the only right answer is no_regression",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 2.0,
+   "cost_usd": 0.35
+  },
+  {
+   "scenario": "two_culprits",
+   "variant": "swarm",
+   "family": "stress",
+   "description": "Two stacked regressions (20% at 4, 25% at 11); either is right",
+   "n": 20,
+   "correct": 20,
+   "exact": 18,
+   "wrong": 0,
+   "probes": 10.5,
+   "cost_usd": 2.096
+  },
+  {
+   "scenario": "broken_builds",
+   "variant": "swarm",
+   "family": "stress",
+   "description": "Commits next to the culprit fail to build",
+   "n": 20,
+   "correct": 20,
+   "exact": 0,
+   "wrong": 0,
+   "probes": 9.0,
+   "cost_usd": 1.435
+  },
+  {
+   "scenario": "flaky_worker",
+   "variant": "swarm",
+   "family": "stress",
+   "description": "10% of trials die (preemption/OOM) with a transient error",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 10.3,
+   "cost_usd": 1.981
+  },
+  {
+   "scenario": "rig_drift",
+   "variant": "swarm",
+   "family": "stress",
+   "description": "GPU slows 0.6% per probe (thermal/neighbour); 15% real drop",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.0,
+   "cost_usd": 1.89
+  },
+  {
+   "scenario": "borderline",
+   "variant": "swarm",
+   "family": "stress",
+   "description": "5% drop under 1.5% noise: just above the 3% floor",
+   "n": 20,
+   "correct": 20,
+   "exact": 11,
+   "wrong": 0,
+   "probes": 17.65,
+   "cost_usd": 3.078
+  },
+  {
+   "scenario": "transient_regression",
+   "variant": "swarm",
+   "family": "stress",
+   "description": "Regressed at 4, fixed at 10: endpoints equal, no regression",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 2.0,
+   "cost_usd": 0.35
+  },
+  {
+   "scenario": "speedup",
+   "variant": "swarm",
+   "family": "stress",
+   "description": "Range got 20% faster: an improvement is not a regression",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 2.0,
+   "cost_usd": 0.35
+  },
+  {
+   "scenario": "wide_range",
+   "variant": "swarm",
+   "family": "stress",
+   "description": "64-commit range, culprit at 37",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 11.1,
+   "cost_usd": 2.258
+  },
+  {
+   "scenario": "hint_spam",
+   "variant": "swarm",
+   "family": "stress",
+   "description": "Every message mentions a hot path: hints carry no signal",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 9.1,
+   "cost_usd": 1.907
+  },
+  {
+   "scenario": "culprit_last",
+   "variant": "swarm",
+   "family": "stress",
+   "description": "Culprit is the bad endpoint's own commit",
+   "n": 20,
+   "correct": 20,
+   "exact": 20,
+   "wrong": 0,
+   "probes": 7.0,
+   "cost_usd": 1.575
+  }
+ ],
+ "scoreboard": [
+  {
+   "ts": "2026-11-03T05:53:00+00:00",
+   "git_sha": "c915ac3+agent-ctx",
+   "mode": "scripted",
+   "variants": {
+    "fallback": {
+     "variant": "fallback",
+     "n": 140,
+     "correct_rate": 0.979,
+     "exact_rate": 0.971,
+     "wrong": 0,
+     "mean_probes": 8.54,
+     "mean_cost_usd": 1.748,
+     "score": 80.77
+    },
+    "single": {
+     "variant": "single",
+     "n": 140,
+     "correct_rate": 0.979,
+     "exact_rate": 0.971,
+     "wrong": 0,
+     "mean_probes": 8.7,
+     "mean_cost_usd": 1.776,
+     "score": 80.46
+    },
+    "swarm": {
+     "variant": "swarm",
+     "n": 140,
+     "correct_rate": 0.979,
+     "exact_rate": 0.971,
+     "wrong": 0,
+     "mean_probes": 8.27,
+     "mean_cost_usd": 1.706,
+     "score": 81.31
+    }
+   }
+  },
+  {
+   "ts": "2026-11-03T05:53:01+00:00",
+   "git_sha": "c915ac3+drift-fix",
+   "mode": "scripted",
+   "variants": {
+    "fallback": {
+     "variant": "fallback",
+     "n": 140,
+     "correct_rate": 1.0,
+     "exact_rate": 0.993,
+     "wrong": 0,
+     "mean_probes": 8.61,
+     "mean_cost_usd": 1.768,
+     "score": 82.77
+    },
+    "single": {
+     "variant": "single",
+     "n": 140,
+     "correct_rate": 1.0,
+     "exact_rate": 0.993,
+     "wrong": 0,
+     "mean_probes": 8.77,
+     "mean_cost_usd": 1.796,
+     "score": 82.46
+    },
+    "swarm": {
+     "variant": "swarm",
+     "n": 140,
+     "correct_rate": 1.0,
+     "exact_rate": 0.993,
+     "wrong": 0,
+     "mean_probes": 8.34,
+     "mean_cost_usd": 1.726,
+     "score": 83.31
+    }
+   }
+  },
+  {
+   "ts": "2026-11-03T06:17:41+00:00",
+   "git_sha": "c915ac39941ecc6cb1558c53fafe3ecd604446fe",
+   "mode": "scripted-all",
+   "variants": {
+    "fallback": {
+     "variant": "fallback",
+     "n": 340,
+     "correct_rate": 0.991,
+     "exact_rate": 0.897,
+     "wrong": 0,
+     "mean_probes": 8.67,
+     "mean_cost_usd": 1.714,
+     "score": 81.78
+    },
+    "single": {
+     "variant": "single",
+     "n": 340,
+     "correct_rate": 0.991,
+     "exact_rate": 0.897,
+     "wrong": 0,
+     "mean_probes": 8.72,
+     "mean_cost_usd": 1.723,
+     "score": 81.68
+    },
+    "swarm": {
+     "variant": "swarm",
+     "n": 340,
+     "correct_rate": 0.991,
+     "exact_rate": 0.897,
+     "wrong": 0,
+     "mean_probes": 8.54,
+     "mean_cost_usd": 1.694,
+     "score": 82.03
+    }
+   }
+  },
+  {
+   "ts": "2026-11-03T06:18:18+00:00",
+   "git_sha": "c915ac39941ecc6cb1558c53fafe3ecd604446fe",
+   "mode": "scripted-all",
+   "variants": {
+    "fallback": {
+     "variant": "fallback",
+     "n": 340,
+     "correct_rate": 1.0,
+     "exact_rate": 0.906,
+     "wrong": 0,
+     "mean_probes": 8.74,
+     "mean_cost_usd": 1.728,
+     "score": 82.53
+    },
+    "single": {
+     "variant": "single",
+     "n": 340,
+     "correct_rate": 1.0,
+     "exact_rate": 0.906,
+     "wrong": 0,
+     "mean_probes": 8.79,
+     "mean_cost_usd": 1.737,
+     "score": 82.42
+    },
+    "swarm": {
+     "variant": "swarm",
+     "n": 340,
+     "correct_rate": 1.0,
+     "exact_rate": 0.906,
+     "wrong": 0,
+     "mean_probes": 8.61,
+     "mean_cost_usd": 1.709,
+     "score": 82.78
+    }
+   }
+  },
+  {
+   "ts": "2026-11-03T06:31:55+00:00",
+   "git_sha": "10d824fae3297eb63a3b561b596bfd610f706f4b",
+   "mode": "live",
+   "variants": {
+    "single": {
+     "variant": "single",
+     "n": 7,
+     "correct_rate": 1.0,
+     "exact_rate": 1.0,
+     "wrong": 0,
+     "mean_probes": 9.43,
+     "mean_cost_usd": 1.89,
+     "score": 81.14
+    },
+    "swarm": {
+     "variant": "swarm",
+     "n": 7,
+     "correct_rate": 1.0,
+     "exact_rate": 0.857,
+     "wrong": 0,
+     "mean_probes": 11.57,
+     "mean_cost_usd": 2.175,
+     "score": 76.86
+    }
+   }
+  }
+ ]
+}

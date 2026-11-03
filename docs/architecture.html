@@ -8,14 +8,14 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bench:#F7F7F2; --panel:#FFFFFF; --ink:#292929; --graphite:#72726E; --rule:#E3E3DE;
-    --green:#5B6F00; --oxide:#BD4A30; --ochre:#B26A00; --steel:#2F5D8A; --teal:#6B5BA8;
-    --serif:"Instrument Serif", Georgia, "Times New Roman", serif;
-    --sans:"IBM Plex Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
-    --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    --bench:#EEF1F4; --panel:#FFFFFF; --ink:#16202B; --graphite:#5B6878; --rule:#D3D9E0;
+    --green:#1F5FBF; --oxide:#C8323C; --ochre:#B26A00; --steel:#1F5FBF; --teal:#6B5BA8;
+    --sans:"Schibsted Grotesk", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    --serif:var(--sans);
+    --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
   }
   * { box-sizing:border-box; }
   html { scroll-behavior:smooth; }
@@ -29,7 +29,7 @@
           grid-template-columns:200px minmax(0,1fr); gap:3rem; }
   .rail { position:sticky; top:0; align-self:start; height:100vh; padding:2.2rem 0;
           display:flex; flex-direction:column; gap:1.6rem; }
-  .brand { font:400 1.35rem var(--serif); text-decoration:none; }
+  .brand { font:700 1.05rem var(--sans); text-decoration:none; }
   .rail nav { display:flex; flex-direction:column; gap:.15rem; }
   .rail nav a { font-size:.9rem; color:var(--graphite); text-decoration:none; padding:.25rem 0 .25rem .7rem;
                 border-left:2px solid transparent; }
@@ -39,19 +39,19 @@
   main { min-width:0; padding:2.2rem 0 4rem; }
 
   .lede-block { padding:1.2rem 0 2.6rem; border-bottom:1px solid var(--rule); }
-  h1 { margin:0 0 1.1rem; font:400 clamp(2.6rem,6vw,4.3rem)/.98 var(--serif); letter-spacing:-.01em;
-       max-width:16ch; }
+  h1 { margin:0 0 1.1rem; font:700 clamp(2.2rem,5vw,3.6rem)/1.02 var(--sans); letter-spacing:-.035em;
+       max-width:18ch; }
   .lede-block p { margin:0; max-width:60ch; font-size:1.1rem; color:var(--graphite); }
   .facts { display:grid; grid-template-columns:repeat(4,1fr); gap:0 1.4rem;
            margin:2rem 0 0; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); }
   .facts div { border:none; border-radius:0; padding:.9rem 0; background:none; }
   .facts div:not(:first-child) { border-left:1px solid var(--rule); padding-left:1.2rem; }
   .facts dt { font:500 .72rem var(--sans); color:var(--graphite); }
-  .facts dd { margin:.15rem 0 0; font:400 1.12rem var(--sans); }
+  .facts dd { margin:.15rem 0 0; font:600 1.12rem var(--sans); }
 
   section { padding:2.8rem 0; border-bottom:1px solid var(--rule); scroll-margin-top:1.5rem; }
   section:last-of-type { border-bottom:0; }
-  h2 { margin:0 0 .5rem; font:400 2.1rem/1.1 var(--serif); }
+  h2 { margin:0 0 .5rem; font:700 clamp(1.6rem,3vw,2.1rem)/1.1 var(--sans); letter-spacing:-.02em; }
   .intro { margin:0 0 1.6rem; max-width:66ch; color:var(--graphite); }
   p { max-width:68ch; margin:0 0 1rem; }
 
@@ -126,9 +126,35 @@
     html { scroll-behavior:auto; }
     * { transition:none !important; }
   }
+  .topnav { position:sticky; top:0; z-index:40; background:color-mix(in srgb, var(--bench) 88%, transparent);
+            backdrop-filter:blur(8px); border-bottom:1px solid var(--rule); }
+  .topnav-inner { max-width:1120px; margin:0 auto; padding:.7rem 1.25rem; display:flex; align-items:center; gap:1.5rem; }
+  .topnav .brand { display:flex; align-items:center; gap:.55rem; color:var(--ink); }
+  .topnav-links { display:flex; gap:.25rem; margin-left:auto; overflow-x:auto; scrollbar-width:none; }
+  .topnav-links a { color:var(--graphite); text-decoration:none; font:500 .92rem var(--sans); padding:.4rem .7rem; border-radius:6px; white-space:nowrap; }
+  .topnav-links a:hover { color:var(--ink); background:var(--panel); }
+  .topnav-links a[aria-current="page"] { color:var(--ink); background:var(--panel); box-shadow:inset 0 0 0 1px var(--rule); }
+  .topnav-links a.gh { color:var(--panel); background:var(--ink); }
+  .rail { top:3.4rem !important; height:calc(100vh - 3.4rem) !important; }
+  .rail .brand { display:none !important; }
+  section { scroll-margin-top:4.5rem !important; }
+  @media (max-width:640px) { .topnav .brand span { display:none; } }
 </style>
 </head>
 <body>
+<header class="topnav">
+  <div class="topnav-inner">
+    <a class="brand" href="index.html"><img src="assets/logo.svg" alt="" width="26" height="26"><span>PerfPilot</span></a>
+    <nav class="topnav-links" aria-label="Site">
+      <a href="index.html#how">How it works</a>
+      <a href="index.html#evidence">GPU evidence</a>
+      <a href="index.html#bench">Bench and swarm</a>
+      <a href="index.html#reports">Run reports</a>
+      <a href="architecture.html" aria-current="page">Architecture</a>
+      <a class="gh" href="https://github.com/bharath03-a/perfpilot">GitHub</a>
+    </nav>
+  </div>
+</header>
 <div id="root"></div>
 <script src="vendor/react.min.js"></script>
 <script src="vendor/react-dom.min.js"></script>
@@ -138,13 +164,13 @@ const { useState, useEffect } = React;
 
 /* ---------- palette by role ---------- */
 const TONE = {
-  blue:  { stroke: "#2F5D8A", fill: "#EAF4FE" },   // decide
+  blue:  { stroke: "#1F5FBF", fill: "#E3ECF8" },   // decide
   teal:  { stroke: "#6B5BA8", fill: "#F3F0FA" },   // advise (brain)
-  green: { stroke: "#5B6F00", fill: "#F2F6E1" },   // prove (verdicts)
-  red:   { stroke: "#BD4A30", fill: "#FBE9E4" },   // spend (GPU)
+  green: { stroke: "#1E7A52", fill: "#E2F2EA" },   // prove (verdicts)
+  red:   { stroke: "#C8323C", fill: "#FBE7E8" },   // spend (GPU)
   amber: { stroke: "#B26A00", fill: "#FDF1E0" },   // bounded salvage
-  slate: { stroke: "#72726E", fill: "#FFFFFF" },   // ground / decision
-  navy:  { stroke: "#292929", fill: "#292929" },
+  slate: { stroke: "#5B6878", fill: "#FFFFFF" },   // ground / decision
+  navy:  { stroke: "#16202B", fill: "#16202B" },
 };
 
 function Node({ n, active, onHover }) {
@@ -157,10 +183,10 @@ function Node({ n, active, onHover }) {
       <rect className="body" x={n.x} y={n.y} width={n.w} height={n.h} rx="6"
             fill={n.solid ? t.stroke : t.fill} stroke={t.stroke} strokeWidth={n.solid ? 0 : 1.4} />
       <text x={cx} y={n.y + 22} textAnchor="middle" fontSize="13" fontWeight="500"
-            fontFamily="IBM Plex Sans, sans-serif" fill={n.solid ? "#fff" : "#292929"}>{n.title}</text>
+            fontFamily="Schibsted Grotesk, sans-serif" fill={n.solid ? "#fff" : "#292929"}>{n.title}</text>
       {(n.lines || []).map((L, i) => (
         <text key={i} x={cx} y={n.y + 39 + i * 15} textAnchor="middle" fontSize="10.5"
-              fontFamily="IBM Plex Mono, monospace" fill={n.solid ? "#F2F2EC" : "#72726E"}>{L}</text>
+              fontFamily="JetBrains Mono, monospace" fill={n.solid ? "#F2F2EC" : "#72726E"}>{L}</text>
       ))}
     </g>
   );
@@ -176,7 +202,7 @@ function Diamond({ n, active, onHover }) {
       <polygon className="body" points={`${cx},${n.y} ${n.x + n.w},${cy} ${cx},${n.y + n.h} ${n.x},${cy}`}
                fill={t.fill} stroke={t.stroke} strokeWidth="1.4" />
       <text x={cx} y={cy + 4} textAnchor="middle" fontSize="11.5" fontWeight="500"
-            fontFamily="IBM Plex Sans, sans-serif" fill="#292929">{n.title}</text>
+            fontFamily="Schibsted Grotesk, sans-serif" fill="#292929">{n.title}</text>
     </g>
   );
 }
@@ -188,7 +214,7 @@ function Edge({ d, label, lx, ly, color, dashed, bold, id }) {
       <path d={d} fill="none" stroke={c} strokeWidth={bold ? 2 : 1.3}
             strokeDasharray={dashed ? "5,4" : ""} markerEnd={`url(#${id})`} />
       {label && <text x={lx} y={ly} textAnchor="middle" fontSize="10.5" fontWeight={bold ? "500" : "400"}
-                      fontFamily="IBM Plex Mono, monospace" fill={c}>{label}</text>}
+                      fontFamily="JetBrains Mono, monospace" fill={c}>{label}</text>}
     </g>
   );
 }
@@ -198,7 +224,7 @@ function Badge({ x, y, n }) {
     <g>
       <circle cx={x} cy={y} r="10" fill="#292929" stroke="#FFFFFF" strokeWidth="1.5" />
       <text x={x} y={y + 3.8} textAnchor="middle" fontSize="10.5" fontWeight="500"
-            fontFamily="IBM Plex Mono, monospace" fill="#FFFFFF">{n}</text>
+            fontFamily="JetBrains Mono, monospace" fill="#FFFFFF">{n}</text>
     </g>
   );
 }
@@ -227,7 +253,7 @@ const marker = (id, color) => (
 /* ---------- navigation ---------- */
 const SECTIONS = [
   ["planes", "Planes"], ["modules", "Modules"], ["bisect", "Bisect"],
-  ["tune", "TuneSmith"], ["agent", "Agentic loop"], ["decisions", "Decisions"], ["status", "Status"],
+  ["tune", "TuneSmith"], ["agent", "Agentic loop"], ["swarm", "Swarm + bench"], ["decisions", "Decisions"], ["status", "Status"],
 ];
 
 function Rail({ active }) {
@@ -274,18 +300,18 @@ function Planes() {
     <figure>
       <div className="svgwrap">
         <svg viewBox="0 0 960 440" role="img" aria-label="Control plane runs locally and decides. Measurement plane runs on Modal A100 and spends money.">
-          <defs>{marker("ha", "#72726E")}{marker("haR", "#BD4A30")}</defs>
-          <text x="30" y="30" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#2F5D8A">control plane · local · $0</text>
-          <rect x="10" y="40" width="940" height="180" rx="6" fill="#F2F2EC" stroke="#2F5D8A" strokeWidth="1" />
-          <text x="430" y="292" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#BD4A30">measurement plane · Modal A100 · $2.10/h</text>
-          <rect x="10" y="272" width="940" height="152" rx="6" fill="#FBF1EE" stroke="#BD4A30" strokeWidth="1" />
+          <defs>{marker("ha", "#72726E")}{marker("haR", "#C8323C")}</defs>
+          <text x="30" y="30" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#1F5FBF">control plane · local · $0</text>
+          <rect x="10" y="40" width="940" height="180" rx="6" fill="#F2F2EC" stroke="#1F5FBF" strokeWidth="1" />
+          <text x="430" y="292" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#C8323C">measurement plane · Modal A100 · $2.10/h</text>
+          <rect x="10" y="272" width="940" height="152" rx="6" fill="#FBF3F3" stroke="#C8323C" strokeWidth="1" />
           {HIGH_NODES.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
           <Edge id="ha" d="M230,140 L260,140" label="ask" lx={243} ly={154} />
           <Edge id="ha" d="M130,80 L130,56 L606,56 L606,76" label="samples → verdict · events → report" lx={368} ly={48} />
           <Edge id="ha" d="M837,200 L837,212 L190,212 L190,204" label="config · commits" lx={770} ly={214} />
-          <Edge id="haR" color="#BD4A30" bold d="M90,224 L90,296" label="run_trial $$$" lx={90} ly={238} />
-          <Edge id="haR" color="#BD4A30" dashed d="M170,296 L170,228" label="TrialResult" lx={170} ly={260} />
-          <Edge id="haR" color="#BD4A30" bold d="M222,222 L400,296" label="answer_batch $$$" lx={342} ly={248} />
+          <Edge id="haR" color="#C8323C" bold d="M90,224 L90,296" label="run_trial $$$" lx={90} ly={238} />
+          <Edge id="haR" color="#C8323C" dashed d="M170,296 L170,228" label="TrialResult" lx={170} ly={260} />
+          <Edge id="haR" color="#C8323C" bold d="M222,222 L400,296" label="answer_batch $$$" lx={342} ly={248} />
         </svg>
       </div>
       <Key items={[["blue", "decide"], ["teal", "advise"], ["green", "prove"], ["red", "spend"], ["slate", "ground"]]} />
@@ -367,19 +393,19 @@ function Modules() {
         <svg viewBox="0 0 1000 760" role="img" aria-label="Module contracts from inputs through execution to evidence">
           <defs>{marker("da", "#72726E")}</defs>
           {DETAIL_ROWS.map(r => (
-            <text key={r.label} x="10" y={r.boxes[0].y - 11} fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#2F5D8A">{r.label}</text>
+            <text key={r.label} x="10" y={r.boxes[0].y - 11} fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#1F5FBF">{r.label}</text>
           ))}
           {all.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
           <Edge id="da" d="M500,106 L500,146" />
           <Edge id="da" d="M500,222 L500,262" label="pick / propose / classify" lx={590} ly={246} />
           <Edge id="da" d="M300,354 L300,394" />
           <Edge id="da" d="M700,354 L700,394" />
-          <Edge id="da" color="#BD4A30" d="M500,490 L500,526" label="run_trial · answer_batch $$$ → TrialResult" lx={590} ly={512} />
+          <Edge id="da" color="#C8323C" d="M500,490 L500,526" label="run_trial · answer_batch $$$ → TrialResult" lx={590} ly={512} />
           <Edge id="da" d="M500,618 L500,636" label="events → render" lx={560} ly={630} />
           <rect x="10" y="640" width="980" height="100" rx="6" fill="#F2F6E1" stroke="#5B6F00" strokeWidth="1.2" />
-          <text x="500" y="668" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="IBM Plex Sans, sans-serif" fill="#292929">Evidence · runs/&lt;run-id&gt;/events.jsonl (14 event types) → render.py → report.html</text>
-          <text x="500" y="688" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">config.yaml · events.jsonl + agent-events.jsonl (merged) · results/&lt;sha&gt;__&lt;flags&gt;/ · logs/</text>
-          <text x="500" y="706" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">perfpilot report re-renders offline · watch adds a 5s auto-reload · demo replays a run event by event · partial runs render honestly</text>
+          <text x="500" y="668" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="Schibsted Grotesk, sans-serif" fill="#292929">Evidence · runs/&lt;run-id&gt;/events.jsonl (14 event types) → render.py → report.html</text>
+          <text x="500" y="688" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#72726E">config.yaml · events.jsonl + agent-events.jsonl (merged) · results/&lt;sha&gt;__&lt;flags&gt;/ · logs/</text>
+          <text x="500" y="706" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#72726E">perfpilot report re-renders offline · watch adds a 5s auto-reload · demo replays a run event by event · partial runs render honestly</text>
         </svg>
       </div>
       <Key items={[["slate", "inputs"], ["blue", "orchestrate"], ["teal", "brain"], ["green", "verdict"], ["red", "GPU spend"]]} />
@@ -465,15 +491,15 @@ const FLOW_EDGES = [
   { d: "M400,54 L400,74" },
   { d: "M400,124 L400,144" },
   { d: "M400,196 L400,214" },
-  { d: "M295,246 L240,246", label: "no", lx: 268, ly: 240, color: "#BD4A30" },
+  { d: "M295,246 L240,246", label: "no", lx: 268, ly: 240, color: "#C8323C" },
   { d: "M400,278 L400,300", label: "yes", lx: 418, ly: 292, color: "#5B6F00" },
-  { d: "M295,332 L240,332", label: "no", lx: 268, ly: 326, color: "#BD4A30" },
+  { d: "M295,332 L240,332", label: "no", lx: 268, ly: 326, color: "#C8323C" },
   { d: "M400,364 L400,384", label: "yes", lx: 418, ly: 376, color: "#5B6F00" },
   { d: "M295,416 L240,416", label: "no", lx: 268, ly: 410, color: "#72726E" },
   { d: "M400,448 L400,470", label: "yes", lx: 418, ly: 460, color: "#5B6F00" },
   { d: "M400,518 L400,536" },
   { d: "M400,588 L400,608" },
-  { d: "M505,640 L600,640", label: "no", lx: 552, ly: 634, color: "#BD4A30" },
+  { d: "M505,640 L600,640", label: "no", lx: 552, ly: 634, color: "#C8323C" },
   { d: "M400,672 L400,690", label: "yes", lx: 418, ly: 682, color: "#5B6F00" },
   { d: "M400,738 L400,758" },
   { d: "M505,790 L690,790", label: "yes", lx: 598, ly: 782, color: "#B26A00" },
@@ -512,14 +538,14 @@ function Flowchart() {
                 <rect className="body" x={n.x} y={n.y} width={n.w} height={n.h} rx={n.h / 2}
                       fill={n.kind === "term" ? "#292929" : "#FFFFFF"} stroke="#292929" strokeWidth={n.kind === "term" ? 0 : 1.3} />
                 <text x={n.x + n.w / 2} y={n.y + n.h / 2 + 4} textAnchor="middle" fontSize="12.5" fontWeight="500"
-                      fontFamily="IBM Plex Sans, sans-serif" fill={n.kind === "term" ? "#FFFFFF" : "#292929"}>{n.title}</text>
+                      fontFamily="Schibsted Grotesk, sans-serif" fill={n.kind === "term" ? "#FFFFFF" : "#292929"}>{n.title}</text>
               </g>
             );
             return <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />;
           })}
           {FLOW_EDGES.map((e, i) => <Edge key={i} id="fa" {...e} />)}
           {FLOW_BADGES.map(([x, y, n], i) => <Badge key={i} x={x} y={y} n={n} />)}
-          <text x="960" y="1040" textAnchor="end" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">1 loop return · 2 same-SHA resample</text>
+          <text x="960" y="1040" textAnchor="end" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#72726E">1 loop return · 2 same-SHA resample</text>
         </svg>
       </div>
       <Key items={[["red", "spends GPU"], ["amber", "bounded salvage"], ["green", "verdict or exit"], ["slate", "decision or label"], ["blue", "search step"]]} />
@@ -587,26 +613,26 @@ function AgentLoop() {
           <use href="#pa4" fill="none" stroke="#72726E" strokeWidth="1.4" markerEnd="url(#ga)" />
           <use href="#pa5" fill="none" stroke="#9aa0bc" strokeWidth="1.4" strokeDasharray="5,4" markerEnd="url(#ga)" />
           <use href="#pa6" fill="none" stroke="#9aa0bc" strokeWidth="1.4" strokeDasharray="5,4" markerEnd="url(#ga)" />
-          <circle r="4" fill="#5B6F00"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0s"><mpath href="#pa1" /></animateMotion></circle>
-          <circle r="4" fill="#5B6F00"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0.3s"><mpath href="#pa2" /></animateMotion></circle>
-          <circle r="4" fill="#5B6F00"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0.6s"><mpath href="#pa3" /></animateMotion></circle>
-          <circle r="4" fill="#5B6F00"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0.9s"><mpath href="#pa4" /></animateMotion></circle>
+          <circle r="4" fill="#1F5FBF"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0s"><mpath href="#pa1" /></animateMotion></circle>
+          <circle r="4" fill="#1F5FBF"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0.3s"><mpath href="#pa2" /></animateMotion></circle>
+          <circle r="4" fill="#1F5FBF"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0.6s"><mpath href="#pa3" /></animateMotion></circle>
+          <circle r="4" fill="#1F5FBF"><animateMotion dur="2.2s" repeatCount="indefinite" begin="0.9s"><mpath href="#pa4" /></animateMotion></circle>
           {AGENT_NODES.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
           {AGENT_NODES.map((n, i) => (
             <g key={"b" + n.id}>
               <circle cx={n.x} cy={n.y} r="11" fill="#292929" />
-              <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize="11" fontWeight="600" fontFamily="IBM Plex Sans, sans-serif" fill="#F7F7F2">{i + 1}</text>
+              <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize="11" fontWeight="600" fontFamily="Schibsted Grotesk, sans-serif" fill="#F7F7F2">{i + 1}</text>
             </g>
           ))}
           <g tabIndex={0} onMouseEnter={() => setHover({title: "Fallback", desc: "Deterministic and always valid: middle commit, 2 extra runs, config-order knobs, next untried config, no explanation. Used when no key is set, a call fails twice, or a proposal is rejected."})} onMouseLeave={() => setHover(null)} onFocus={() => setHover({title: "Fallback"})} onBlur={() => setHover(null)}>
             <rect x="490" y="262" width="180" height="70" rx="6" fill="#FFFFFF" stroke="#72726E" strokeWidth="1.4" strokeDasharray="5,4" />
-            <text x="580" y="290" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="IBM Plex Sans, sans-serif" fill="#292929">Fallback</text>
-            <text x="580" y="307" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">middle · 2 runs · next</text>
+            <text x="580" y="290" textAnchor="middle" fontSize="13" fontWeight="500" fontFamily="Schibsted Grotesk, sans-serif" fill="#292929">Fallback</text>
+            <text x="580" y="307" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#72726E">middle · 2 runs · next</text>
           </g>
           {AGENT_TAGS.map(([x, y, t], i) => (
-            <text key={i} x={x} y={y} textAnchor="middle" fontSize="10" fontFamily="IBM Plex Mono, monospace" fill="#72726E">{t}</text>
+            <text key={i} x={x} y={y} textAnchor="middle" fontSize="10" fontFamily="JetBrains Mono, monospace" fill="#72726E">{t}</text>
           ))}
-          <text x="480" y="352" textAnchor="middle" fontSize="10.5" fontFamily="IBM Plex Mono, monospace" fill="#72726E">solid = proposal path · dashed = fallback (no key · failed call · rejected)</text>
+          <text x="480" y="352" textAnchor="middle" fontSize="10.5" fontFamily="JetBrains Mono, monospace" fill="#72726E">solid = proposal path · dashed = fallback (no key · failed call · rejected)</text>
         </svg>
       </div>
       <Key items={[["blue", "ask"], ["teal", "propose"], ["amber", "gate"], ["green", "dispose"], ["slate", "log"]]} />
@@ -644,11 +670,70 @@ function TraceStrip() {
   );
 }
 
-/* ---------- 06 · decisions ---------- */
+
+/* ---------- 06 · swarm + bench harness ---------- */
+const SWARM_NODES = [
+  { id: "scen", x: 20, y: 40, w: 200, h: 86, tone: "slate", title: "17 scenarios",
+    lines: ["7 core · 10 stress", "hidden planted truth"],
+    desc: "bench/scenarios.py. Core: clean, mild, noisy, outlier, code hint, misleading hint, no regression. Stress: stacked culprits, broken builds, flaky worker, rig drift, 5% borderline, transient regression, speedup, 64-commit range, hint spam, culprit at the bad end." },
+  { id: "sim", x: 20, y: 160, w: 200, h: 86, tone: "red", title: "SimGPU",
+    lines: ["seeded noise · 0.47× collapses", "preempts · build fails · $"],
+    desc: "bench/sim.py replaces the Modal worker with the same MeasureFn contract. Noise, collapsed runs (the 0.47× factor seen live), transient 'trial error' preemptions, broken builds, per-probe rig drift, metered at 120 s setup + 60 s/run at $2.10/h. $0 real spend." },
+  { id: "bis", x: 270, y: 30, w: 150, h: 60, tone: "teal", title: "bisector",
+    lines: ["halves range · low"],
+    desc: "Always proposes the middle of the open range at low confidence. The swarm's floor: with no signal it reduces to plain bisect." },
+  { id: "cod", x: 270, y: 104, w: 150, h: 60, tone: "teal", title: "code_reader",
+    lines: ["hot-path msgs · high"],
+    desc: "Flags commit messages naming scheduler, attention, KV cache, CUDA graphs, sampling or kernels. Abstains when more than 25% of the open range matches: a hint must discriminate (fixed after hint_spam cost 2.2x probes)." },
+  { id: "sta", x: 270, y: 178, w: 150, h: 60, tone: "teal", title: "statistician",
+    lines: ["confirm parent · high"],
+    desc: "When a hint-led probe measures bad, proposes its parent: if the parent is good the edge is proven in one probe. This combo cut code_hint from 9 to 6 probes; neither role does it alone." },
+  { id: "ref", x: 470, y: 90, w: 170, h: 86, tone: "amber", title: "referee",
+    lines: ["Σ confidence votes", "ties → even split"],
+    desc: "bench/swarm.py referee: drops out-of-range votes, sums low=1 medium=2 high=3 per SHA, breaks ties toward the most balanced split. Deterministic. Logs every vote as a swarm_pick event in live mode." },
+  { id: "rb", x: 690, y: 90, w: 170, h: 86, tone: "blue", title: "run_bisect",
+    lines: ["validates pick", "Welch verdicts · retries"],
+    desc: "The production driver, unchanged contract. It still validates every pick, so roles cost probes but never verdicts. Retries transient 'trial error' outcomes; pools and trims doubly-contaminated endpoints." },
+  { id: "jud", x: 690, y: 218, w: 170, h: 70, tone: "green", title: "judge + score",
+    lines: ["correct · exact · wrong"],
+    desc: "harness.judge compares the verdict with the hidden truth. Score = 100*correct - 200*wrong - 2*probes per run. A wrong verdict costs two right ones." },
+  { id: "sb", x: 470, y: 218, w: 170, h: 70, tone: "slate", title: "scoreboard.jsonl",
+    lines: ["per git SHA · trend"],
+    desc: "bench/scoreboard.jsonl is committed: one line per recorded run with every variant's metrics, so each change to the agent is measured against the last. perfpilot bench --record; --export feeds the Pages charts." },
+];
+
+function SwarmBench() {
+  const [hover, setHover] = useState(null);
+  return (
+    <figure>
+      <div className="svgwrap">
+        <svg viewBox="0 0 880 310" role="img" aria-label="Bench harness: scenarios and a simulated GPU feed run_bisect; three swarm roles vote, a referee picks, run_bisect validates, a judge scores against hidden truth, scores land on a per-commit scoreboard">
+          <defs>{marker("sw", "#72726E")}</defs>
+          {SWARM_NODES.map(n => <Node key={n.id} n={n} active={hover && hover.id === n.id} onHover={setHover} />)}
+          <Edge id="sw" d="M420,60 L466,118" />
+          <Edge id="sw" d="M420,134 L466,134" />
+          <Edge id="sw" d="M420,208 L466,150" />
+          <Edge id="sw" d="M640,133 L686,133" label="pick" lx={663} ly={124} />
+          <Edge id="sw" d="M775,176 L775,214" label="outcome" lx={808} ly={198} />
+          <Edge id="sw" d="M690,253 L644,253" />
+          <Edge id="sw" d="M220,203 L245,203 L245,300 L860,300 L860,180" label="measure(sha, runs)" lx={520} ly={290} />
+          <Edge id="sw" d="M120,126 L120,156" label="truth hidden" lx={160} ly={146} />
+        </svg>
+      </div>
+      <Key items={[["teal", "role proposes"], ["amber", "referee"], ["blue", "driver"], ["green", "judge"], ["red", "simulated spend"]]} />
+      <Readout node={hover} />
+      <figcaption>Same driver, same stats, swapped measurement plane. <code>perfpilot bench --suite all --seeds 20</code> scores
+      fallback, single and swarm in seconds; <code>--live-brain</code> swaps the scripted roles for Baseten personas.</figcaption>
+    </figure>
+  );
+}
+
+/* ---------- 07 · decisions ---------- */
 const DECISIONS = [
   ["The brain decides, never measures.", "Every number comes from a GPU trial. The LLM proposes commits, extra-run counts, knob order and one-knob changes. Each answer is schema-validated and range-checked, with a deterministic fallback logged as an agent_call event."],
   ["Same GPU, every time.", "A pinned A100-40GB and one warm container (max_containers=1) for the whole run. The GPU UUID is re-checked on every trial, so a change is an error, never a comparison. Warmup runs before measured runs."],
   ["Fail loudly, log everything.", "Secrets come from env only. Fourteen typed event types record ok, skip and error trial states, per-commit verdicts, tune_result, and endpoint_error and culprit_range outcomes. Nothing is silent or zero-filled."],
+  ["Measure the agent, not just the model.", "Every agent change runs the 17-scenario bench first. The swarm only ships where it wins on the scoreboard; scripted roles are heuristics, and only --live-brain scores the real model. Failures found there are replayed as regression tests from the exact seeds."],
   ["Quality is a gate, not a metric.", "Numeric knobs and the final TuneSmith config must stay within 2 points of baseline accuracy on the 50-question bank. Speed that costs quality is reverted."],
 ];
 
@@ -659,6 +744,7 @@ const MILESTONES = [
   ["M3 · agent brain", "ok", "wired · live probe passed", "Baseten ok via complete_validated; tune run drove 7 live proposals"],
   ["M4 · tune + verify/explain", "ok", "GPU evaluated · honest negative", "6 candidates, none cleared +2%; fp8 rejected on A100; baseline kept"],
   ["M5 · report / watch / README", "ok", "11 recorded runs re-render", "verdict card + agent panel fixed; demo replay added"],
+  ["M6 · swarm + bench harness", "ok", "17 scenarios × 20 seeds · 0 wrong", "3 driver bugs found + fixed; swarm −33% probes on code hints"],
 ];
 
 function useActiveSection() {
@@ -690,7 +776,7 @@ function App() {
           <p>An agent for vLLM performance. PerfBisect locates the first slow commit. TuneSmith recovers speed
           through serve flags. Every verdict rests on a measured interval, and the brain only proposes.</p>
           <dl className="facts">
-            <div><dt>Tests</dt><dd>213 passing</dd></div>
+            <div><dt>Tests</dt><dd>218 passing</dd></div>
             <div><dt>Metered GPU</dt><dd>A100-40GB, $2.10/h</dd></div>
             <div><dt>Local logic</dt><dd>$0, no GPU</dd></div>
             <div><dt>Advisor</dt><dd>muse-spark-open on Baseten</dd></div>
@@ -729,6 +815,12 @@ function App() {
           <h2>Agentic loop</h2>
           <p className="intro">The brain proposes, the interval disposes. Every call is validated, every miss lands on a logged deterministic fallback, each decision learns from the earlier ones, and a verified culprit gets a drafted revert.</p>
           <AgentLoop />
+        </section>
+
+        <section id="swarm">
+          <h2>Swarm + bench harness</h2>
+          <p className="intro">A gym for the agent loop: planted regressions, a seeded simulated A100, three proposer roles and a referee, scored against hidden truth and tracked per commit. It found three real driver bugs before any GPU did.</p>
+          <SwarmBench />
         </section>
 
         <section id="decisions">
