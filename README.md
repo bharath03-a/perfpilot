@@ -1,16 +1,41 @@
 # PerfPilot
 
-Agent that keeps a vLLM deployment of a Meta open model fast.
-**PerfBisect** finds the first slow commit; **TuneSmith** recovers speed via
-serve flags. Every claim is benchmark-verified with intervals — never vibes.
+**vLLM ships performance regressions silently.** A flag default or kernel change
+can cost 10–60% throughput, and nobody notices until the bill arrives. Finding the
+commit by hand means hours of GPU benchmarking that a single noisy run can fool.
 
-Push the Frontier: an agent that gives vLLM maintainers a new capability —
-per-commit regression culprits with statistical proof. One-line usage:
-`perfpilot bisect --good G --bad B` → culprit + interval + GPU $;
-any report re-renders offline via `perfpilot report runs/<run-id>`.
+PerfPilot is an agent that does it for you, and proves its answer:
 
-Indie track, Push the Frontier. Plan and spec: [PLAN.md](PLAN.md), [SPEC.md](SPEC.md).
-Interactive diagrams: [docs/](docs/index.html).
+- **PerfBisect**: `perfpilot bisect --good G --bad B` gives the culprit commit, a
+  statistical interval and the GPU dollars it spent.
+- **TuneSmith**: `perfpilot tune --commit C` tries serve flags to win the speed back
+  and accepts a flag only when its gain is proven and quality holds.
+- **Proposer swarm**: open-weights agents (Baseten `muse-spark-open`) pick which
+  commit to probe. A deterministic referee and the benchmarks overrule them.
+  Brain proposes, benchmarks dispose.
+- **Bench harness**: 17 planted-failure scenarios (noise, outliers, broken builds,
+  flaky workers, rig drift, misleading hints) score every change, keyed to git SHA.
+
+| Result | Value |
+|---|---|
+| Wrong verdicts (17 scenarios × 20 seeds, plus every GPU run) | **0** |
+| Real A100 runs, end to end with the live swarm | 5 recorded reports |
+| Total GPU spend for the whole project | **$8.63** |
+| Tests | 224 passing |
+
+Meta open models throughout: **Llama-3.2-1B** is the model being served and
+measured; **muse-spark-open** is the agent brain. Every model in the loop is open weights.
+
+Site with live charts and recorded runs: https://bharath03-a.github.io/perfpilot/ ·
+Architecture: [docs/architecture.html](docs/architecture.html) · Plan: [PLAN.md](PLAN.md)
+
+Try it in a minute, with no GPU and no key:
+
+```
+uv sync && uv run perfpilot bench --seeds 2
+```
+
+Indie track, Push the Frontier. Built during the hackathon (Oct 26 – Nov 4, 2026).
 
 ## How it works
 
@@ -38,7 +63,7 @@ tune --commit C → propose flags → measure → quality gate (50Q bank)
 | M4 tune + verify | GPU evaluated | 6 flag candidates, none beat baseline +2% (5 no-uplift, fp8 impossible on A100 recorded as rejection); baseline kept, quality held |
 | M5 report/watch/README | in progress | 7 recorded runs re-render; this file |
 
-Suite: **222 passed, 1 skipped**, `ruff check` + `format` clean.
+Suite: **224 passed, 1 skipped**, `ruff check` + `format` clean.
 
 ## Eval (local, fake transport)
 

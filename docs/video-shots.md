@@ -1,26 +1,22 @@
-# Video shot list (3 min, 2:50 target, ~400 words)
+# Video script (3 min, 2:50 target)
 
-Total GPU spend for all footage: $0 — record runs, never live-GPU.
-Script outline: [story-research.md](story-research.md) §5.1. Every sentence
-below is cross-checked against README/`runs/`; no promised uplift, no
-unsupported numbers.
+Record from recorded runs only, never live GPU. Screen-record the Pages site
+(https://bharath03-a.github.io/perfpilot/) at 125% zoom with captions burned in.
+Every number below is in the README or `runs/`.
 
-## Beats
-
-| Time | Shot | Source |
+| Time | On screen | Say |
 |---|---|---|
-| 0:00–0:15 | Hook: verdict card with the tok/s cliff | `runs/m2-eval-9/report.html` — Culprit `e5196e29`, regression −60.1% (derived from endpoint trials), unverified |
-| 0:15–0:40 | Problem: vLLM regressions ship silently; hand-bisect is slow and foolable — "our first GPU eval was fooled exactly that way" | vLLM issue #39940 numbers + `docs/architecture.html` range diagram |
-| 0:40–0:55 | Solution: two planes; "brain proposes, benchmarks dispose"; "every model in this loop is open weights" | `docs/architecture.html` planes diagram; `perfpilot bisect --good G --bad B` |
-| 0:55–1:35 | Proof (bisect): `perfpilot demo runs/m2-eval-9` replay | Timeline narrows on screen; land on culprit + interval + GPU $. Include the `[3569, 3594, 1703]` baseline-outlier moment and the re-measure fix in one breath |
-| 1:35–2:00 | Proof (tune, honest): tune report | `runs/tune-20261101-150900/report.html` — 6 candidates, intervals, fp8 rejected (A100 lacks Hopper FP8), "Baseline kept". Line: "an agent that can say 'no win here' is one you can trust when it says 'win'" |
-| 2:00–2:35 | Numbers: local table and GPU table side by side, labelled as different instruments | README eval sections — local 2/2 ($0) vs GPU 0 wrong verdicts ($4.63) + mild-overlay premise measured −0.8%. Say the first-commit limitation out loud |
-| 2:35–2:55 | Close: end card | Repo URL, `perfpilot report runs/<id>` re-renders offline, X handle. "Built this week, all open weights. Thank you." |
+| 0:00–0:15 | Site hero; the bisect replay animates and narrows onto the culprit band | "vLLM ships performance regressions silently. One commit can cost you half your throughput. PerfPilot finds it, and proves it." |
+| 0:15–0:35 | A vLLM perf-regression issue, then the hero again | "Finding it by hand means hours of GPU benchmarking, and one noisy run fools you. Our own first GPU run got fooled exactly that way: one collapsed sample at 1,703 tok/s." |
+| 0:35–0:55 | Architecture page, planes diagram | "Two planes. A free local plane decides and proves. A metered A100 on Modal only measures. The brain, Meta's muse-spark-open on Baseten, only advises. Brain proposes, benchmarks dispose. Every model in this loop is open weights: we serve Llama-3.2-1B, and the agent is muse-spark-open." |
+| 0:55–1:25 | Run reports tab: `eval-t0` report, swarm votes panel, then the timeline | "The agent is a swarm: a bisector, a code reader that reads commit messages, and a statistician, plus a deterministic referee. Here's a real A100 run, end to end: we planted a slowdown at commit 7, the swarm voted, and the range closed around commit 7 with every commit labelled correctly. Cost: $1.17." |
+| 1:25–2:00 | Bench section: heatmap, then dumbbells | "How do we know it's getting better? A gym. 17 scenarios with hidden truth: noise, outlier runs, broken builds, flaky workers, rig drift, misleading commit messages. Every change is scored and logged against its git SHA. Building it caught real bugs, like a contaminated baseline we now fix with a pooled median trim." |
+| 2:00–2:20 | Bench live table: single vs swarm | "And we're honest about it. With the live model, the swarm wins when commit messages carry real signal, six probes versus ten, and loses on pure noise. So the referee is deterministic, and the agents never get the last word." |
+| 2:20–2:40 | Tune report: 6 candidates, fp8 rejected, "Baseline kept" | "TuneSmith tries serve flags to win speed back. On this rig none beat baseline by the 2% bar, and FP8 is impossible on an A100. It said so. An agent that can say 'no win here' is one you can trust when it says 'win'." |
+| 2:40–2:55 | End card: repo URL, site URL, `uv run perfpilot bench` | "Zero wrong verdicts, 224 tests, $8.63 of GPU for the whole project. Clone it and run the bench with no GPU and no key. Thanks." |
 
 ## Rules
 
-- No live GPU on camera. Screen-record the reports and docs pages at 125% zoom; burn in captions (numbers must be readable paused).
-- Say out loud: open weights + agentic loop with accepted/rejected proposals.
-- Never merge the local (2/2) and GPU tables into one score.
-- Upload unlisted, test the link logged out, then publish. Reserve the final afternoon solely for this.
-- End card: repo link + X post (impact line + 20s dashboard clip).
+- Say "open weights" and "agentic loop" out loud. Show an accepted and a rejected proposal.
+- Never merge scripted bench, live bench and GPU numbers into one score. Label each one.
+- Upload unlisted, test the link while logged out, then set `VIDEO_ID` in `docs/index.html`.
