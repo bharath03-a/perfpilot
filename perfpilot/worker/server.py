@@ -85,15 +85,21 @@ def kill_process_group(proc: subprocess.Popen[str], grace_s: float = 30.0) -> No
         pass
 
 
+#: Repeated per-process warnings that bury the real failure in the tail.
+LOG_NOISE = ("torch._opaque_base is deprecated",)
+
+
 def log_tail(log_path: str, max_chars: int = 4000) -> str:
     try:
         with open(log_path, "rb") as fh:
             fh.seek(0, os.SEEK_END)
             size = fh.tell()
-            fh.seek(max(0, size - max_chars))
-            return fh.read().decode(errors="replace")
+            fh.seek(max(0, size - max_chars * 8))
+            text = fh.read().decode(errors="replace")
     except OSError as exc:
         return f"<log unreadable: {exc}>"
+    kept = [ln for ln in text.splitlines() if not any(n in ln for n in LOG_NOISE)]
+    return "\n".join(kept)[-max_chars:]
 
 
 @dataclass

@@ -434,3 +434,14 @@ def test_driver_passes_agent_pick_through(tmp_path) -> None:
         pick=pick,
     )
     assert seen and summary["correct"]
+
+
+def test_brief_reason_keeps_headline_and_log_end() -> None:
+    from perfpilot.modes.driver import brief_reason
+
+    reason = "trial error: server unhealthy" + "x" * 5000 + "REAL CAUSE"
+    out = brief_reason(reason)
+    assert out.startswith("trial error: server unhealthy")
+    assert out.endswith("REAL CAUSE")
+    assert len(out) < 1700
+    assert brief_reason("short") == "short"

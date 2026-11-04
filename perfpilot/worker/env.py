@@ -139,10 +139,19 @@ class EnvResult:
 MIN_FREE_GB = 25.0
 RETRY_FREE_GB = 60.0
 DISK_FULL = "no space left on device"
+#: Modal volumes cap inodes (500k); a torch+vLLM venv is ~85k files, so the
+#: volume fills by file count long before bytes. eval-t0 hit this at 409 GB free.
+MIN_FREE_INODE_FRAC = 0.25
+MAX_ENVS = 3
 
 
 def _free_gb(path: str) -> float:
     return shutil.disk_usage(path).free / 1e9
+
+
+def _free_inode_frac(path: str) -> float:
+    st = os.statvfs(path)
+    return st.f_ffree / st.f_files if st.f_files else 1.0
 
 
 def prune_envs(
@@ -150,6 +159,8 @@ def prune_envs(
     env_root: str = ENV_ROOT,
     min_free_gb: float = MIN_FREE_GB,
     free_gb: Callable[[], float] | None = None,
+    free_inodes: Callable[[], float] | None = None,
+    max_envs: int = MAX_ENVS,
 ) -> list[str]:
     """Delete least-recently-used per-commit venvs until enough space is free.
 
@@ -158,8 +169,9 @@ def prune_envs(
     """
     import os
 
-    measure = free_gb or (lambda: _free_gb(env_root))
-    if not os.path.isdir(env_root) or measure() >= min_free_gb:
+    gb = free_gb or (lambda: _free_gb(env_root))
+    inodes = free_inodes or (lambda: _free_inode_frac(env_root))
+    if not os.path.isdir(env_root):
         return []
     candidates = sorted(
         (
@@ -169,9 +181,17 @@ def prune_envs(
         ),
         key=lambda entry: entry.stat().st_mtime,
     )
+
+    def roomy(remaining: int) -> bool:
+        return (
+            remaining < max_envs
+            and gb() >= min_free_gb
+            and inodes() >= MIN_FREE_INODE_FRAC
+        )
+
     removed: list[str] = []
-    for entry in candidates:
-        if measure() >= min_free_gb:
+    for i, entry in enumerate(candidates):
+        if roomy(len(candidates) - i):
             break
         shutil.rmtree(entry.path, ignore_errors=True)
         removed.append(entry.name)

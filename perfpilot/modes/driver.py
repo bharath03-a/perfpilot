@@ -21,6 +21,16 @@ MeasureFn = Callable[[str, int], TrialOutcome]
 InjectFn = Callable[[str], str | None]
 
 
+REASON_HEAD, REASON_TAIL = 160, 1500
+
+
+def brief_reason(reason: str) -> str:
+    """Keep the error headline and the log end; the middle is rarely the cause."""
+    if len(reason) <= REASON_HEAD + REASON_TAIL:
+        return reason
+    return f"{reason[:REASON_HEAD]} … {reason[-REASON_TAIL:]}"
+
+
 def modal_measure_factory(
     app_name: str,
     cls_name: str,
@@ -151,7 +161,7 @@ def drive_eval_trial(
                 sha=sha,
                 runs=runs,
                 attempt="retry",
-                reason=first.reason[:300],
+                reason=brief_reason(first.reason),
             )
             return raw_measure(sha, runs)
         return first

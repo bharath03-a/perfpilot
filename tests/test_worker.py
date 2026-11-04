@@ -583,3 +583,42 @@ def test_disk_full_reason_is_distinct() -> None:
         2, "copy x: No space left on device (os error 28)"
     )
     assert reason.startswith("cache volume full")
+
+
+def test_prune_envs_fires_on_inodes_even_with_free_bytes(tmp_path) -> None:
+    a, b = "a" * 40, "b" * 40
+    _mk_env(tmp_path, a, 1)
+    _mk_env(tmp_path, b, 2)
+    inodes = iter([0.12, 0.40])
+    removed = env.prune_envs(
+        keep=b,
+        env_root=str(tmp_path),
+        free_gb=lambda: 409.0,
+        free_inodes=lambda: next(inodes),
+    )
+    assert removed == [a]
+
+
+def test_prune_envs_caps_venv_count(tmp_path) -> None:
+    shas = [c * 40 for c in "abcd"]
+    for age, sha in enumerate(shas):
+        _mk_env(tmp_path, sha, age)
+    removed = env.prune_envs(
+        keep="e" * 40,
+        env_root=str(tmp_path),
+        free_gb=lambda: 409.0,
+        free_inodes=lambda: 0.9,
+        max_envs=2,
+    )
+    assert removed == shas[:3]
+
+
+def test_log_tail_drops_noise_lines(tmp_path) -> None:
+    from perfpilot.worker.server import log_tail
+
+    log = tmp_path / "serve.log"
+    noise = "W torch._opaque_base is deprecated, use x\n" * 500
+    log.write_text("start\n" + noise + "RuntimeError: NCCL hang\n")
+    tail = log_tail(str(log), 2000)
+    assert "opaque_base" not in tail
+    assert tail.endswith("RuntimeError: NCCL hang")
