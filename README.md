@@ -21,10 +21,12 @@ PerfPilot is an agent that does it for you, and proves its answer:
 | Wrong verdicts (17 scenarios × 20 seeds, plus every GPU run) | **0** |
 | Real A100 runs, end to end with the live swarm | 5 recorded reports |
 | Total GPU spend for the whole project | **$8.63** |
-| Tests | 224 passing |
+| Tests | 228 passing |
 
 Meta open models throughout: **Llama-3.2-1B** is the model being served and
 measured; **muse-spark-open** is the agent brain. Every model in the loop is open weights.
+
+**Demo video (3 min):** https://youtu.be/ynz1ShHlRZ8
 
 Site with live charts and recorded runs: https://bharath03-a.github.io/perfpilot/ ·
 Architecture: [docs/architecture.html](docs/architecture.html) · Plan: [PLAN.md](PLAN.md)
@@ -63,7 +65,7 @@ tune --commit C → propose flags → measure → quality gate (50Q bank)
 | M4 tune + verify | GPU evaluated | 6 flag candidates, none beat baseline +2% (5 no-uplift, fp8 impossible on A100 recorded as rejection); baseline kept, quality held |
 | M5 report/watch/README | in progress | 7 recorded runs re-render; this file |
 
-Suite: **224 passed, 1 skipped**, `ruff check` + `format` clean.
+Suite: **228 passed, 1 skipped**, `ruff check` + `format` clean.
 
 ## Eval (local, fake transport)
 
@@ -106,8 +108,11 @@ End-to-end with the live swarm (`perfpilot eval --agent swarm --culprit 7
 --commits-from runs/m2-eval-11`, `runs/eval-t0-20261102-232311`, $1.17): culprit range
 of 6 containing planted commit 7, 12 trials, every measured commit labelled
 correctly. Six trials failed at wheel install with `No space left on device`
-on the Modal cache volume; the worker now prunes least-recently-used venvs
-before installing and retries once on disk-full (tested).
+on the Modal cache volume. Root cause: the volume caps **inodes** (500k), not
+bytes; each vLLM venv is ~85k files, so a 6th venv fails with 409 GB still free.
+The worker now prunes least-recently-used venvs on inode pressure and a venv-count
+cap, and failure logs keep the real error tail (tested). A follow-up GPU run
+installed and measured both previously-failing commits.
 
 Wrong verdicts at any step: 0 in all trials (all intermediates ambiguous or
 skipped; endpoints labeled correctly). GPU minutes + per-trial cost are in
