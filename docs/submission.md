@@ -25,7 +25,7 @@ Every model in the loop is open weights.
 ## Links
 - Repo: https://github.com/bharath03-a/perfpilot
 - Site: https://bharath03-a.github.io/perfpilot/
-- Video: TODO
+- Video: https://youtu.be/NJbV1aXLIMc
 
 ## X post
 vLLM ships perf regressions silently. I built PerfPilot: an open-weights agent swarm (Llama + muse-spark-open) that bisects vLLM on a real A100 and names the slow commit, with a statistical interval and the GPU bill.
